@@ -43,11 +43,8 @@ weekly/monthly entries that synthesise recent activity (separate from day-to-day
 Fields:
 - **Entry Date** — auto-filled
 - **Mood** — free-text/word choice (e.g. "anxious", "content"); not a numeric or emoji scale
-- **Prompt** — auto-filled if the user chose a prompt at the outset, otherwise entered manually; **read-only** once set
+- **Prompt** — optional free text entered by the user; **read-only** once set
 - Free-form body
-
-Prompts are user-defined templates, assignable **per Collection** (e.g. a "Work" journal has
-different prompts available than a "Health" journal).
 
 ### Idea
 Lightweight capture. Fully free-form — no structured fields.
@@ -88,11 +85,11 @@ Fields:
 ## Tags
 
 - **Curated only**: users pick from a predefined, managed tag list — no ad hoc tag creation on the fly
-- Tags can be **renamed or merged** without losing or orphaning any notes attached to them
+- Tags can be **renamed** without losing any notes attached to them
 - Tags are **optional** — a note can be saved with zero tags
 - A dedicated **"untagged" filter/view** makes it easy to find notes awaiting future organisation
-- Tags actively power a **related notes / graph-style view**: selecting a tag surfaces everything
-  linked to it across Types and Collections
+- Selecting a tag shows a simple list of everything linked to it across Types and Collections
+  (the timeline filtered by that tag)
 
 ## Home View & Resurfacing
 
@@ -101,8 +98,9 @@ Fields:
 - **Resurfacing**: spaced/semi-random resurfacing of older notes (especially Memories), independent
   of date — designed to surface forgotten material rather than a simple date-based "on this day" feed
 
-## Open Questions / Not Yet Decided
+## Decisions & Out of Scope
 
-- Platform & tech stack (web/mobile/desktop, frameworks)
-- Data model / storage (local-first vs cloud, file format)
-- Search vs browse balance across the timeline and related-notes graph
+- Stack: React frontend, Python FastAPI backend, PostgreSQL; deployed as a single-user demo
+- Single user, no accounts or login
+- Browse only: no text search
+- Out of scope: graph visualisation, tag merging, user-defined prompt templates, multi-user support
