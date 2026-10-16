@@ -1,8 +1,9 @@
 import { Route, Routes } from "react-router-dom";
-import Layout from "./Layout";
+import CollectionsPage from "./CollectionsPage";
 import HomePage from "./HomePage";
+import Layout from "./Layout";
 import NewNotePage from "./NewNotePage";
-import { CollectionsPage, TagsPage } from "./pages";
+import TagsPage from "./TagsPage";
 import TimelinePage from "./TimelinePage";
 
 export default function App() {
