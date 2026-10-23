@@ -43,12 +43,33 @@ export default function CollectionsPage() {
   const [collections, setCollections] = useState<Collection[] | null>(null);
   const [action, setAction] = useState<Action | null>(null);
   const [message, setMessage] = useState<{ key: string; text: string } | null>(null);
+  const [loadError, setLoadError] = useState("");
 
-  const refresh = useCallback(async () => setCollections(await api.listCollections()), [api]);
+  // On a failed load the tree is hidden rather than left stale.
+  const refresh = useCallback(async () => {
+    try {
+      setCollections(await api.listCollections());
+      setLoadError("");
+    } catch (err) {
+      setCollections(null);
+      setLoadError(err instanceof Error ? err.message : "Something went wrong");
+    }
+  }, [api]);
   useEffect(() => {
     refresh();
   }, [refresh]);
 
+  if (loadError) {
+    return (
+      <>
+        <h1>Collections</h1>
+        <p role="alert">Could not load collections: {loadError}</p>
+        <button type="button" onClick={() => refresh()}>
+          Retry
+        </button>
+      </>
+    );
+  }
   if (!collections) return <h1>Collections</h1>;
 
   const duplicate = (name: string, parentId: string | null, excludeId?: string) =>

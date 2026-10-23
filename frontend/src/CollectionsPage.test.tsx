@@ -194,3 +194,27 @@ describe("delete", () => {
     expect(await within(row("Archive")).findByRole("alert")).toHaveTextContent("server down");
   });
 });
+
+describe("load failures", () => {
+  test("a failed initial load shows an error and Retry loads the tree", async () => {
+    vi.spyOn(api, "listCollections").mockRejectedValueOnce(new Error("offline"));
+    renderWithApp(<CollectionsPage />, api);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not load collections: offline");
+    expect(screen.queryByText("No collections yet")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByText("Work")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  test("a failed reload after a successful add shows an error instead of a stale tree", async () => {
+    await show();
+    vi.spyOn(api, "listCollections").mockRejectedValueOnce(new Error("offline"));
+    fireEvent.click(screen.getByRole("button", { name: "Add collection" }));
+    type("New collection name", "Zed");
+    submitIn(screen.getByLabelText("New collection name"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not load collections: offline");
+    expect(screen.queryByText("Work")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByText("Zed")).toBeInTheDocument();
+  });
+});
