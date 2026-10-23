@@ -5,6 +5,7 @@ description = "REST API for the notes app"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",
+    "pydantic-settings>=2.16.1",
     "uvicorn>=0.30",
 ]
 
