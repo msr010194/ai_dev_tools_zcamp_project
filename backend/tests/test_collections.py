@@ -541,3 +541,69 @@ def test_deep_nesting_four_levels(client):
     for collection_id in (detail, sub, project, work):
         assert client.delete(f"/collections/{collection_id}").status_code == 204
     assert tree(client) == []
+
+
+def test_deep_chain_created_through_api_lists_as_tree(client):
+    depth = 300
+    ids = []
+    parent_id = None
+    for level in range(depth):
+        parent_id = create(client, f'Level "{level}" é', parent_id)
+        ids.append(parent_id)
+
+    nodes = tree(client)
+    expected_parent = None
+    for level, collection_id in enumerate(ids):
+        assert len(nodes) == 1
+        current = nodes[0]
+        assert current["id"] == collection_id
+        assert current["name"] == f'Level "{level}" é'
+        assert current["parent_id"] == expected_parent
+        expected_parent = collection_id
+        nodes = current["children"]
+    assert nodes == []
+
+    before = tree(client)
+    response = client.patch(f"/collections/{ids[0]}", json={"parent_id": ids[-1]})
+    assert response.status_code == 400
+    assert response.json() == {"detail": CYCLE}
+    assert tree(client) == before
+
+
+def test_very_deep_chain_lists_as_tree(client, store):
+    # Deeper than Python's default recursion limit; the response is checked as text
+    # because json.loads itself is recursive and cannot parse it.
+    depth = 2000
+    ids = [f"c{level:04d}" for level in range(depth)]
+    for level, collection_id in enumerate(ids):
+        parent_id = ids[level - 1] if level else None
+        store.collections.add(Collection(id=collection_id, name=f"L{level}", parent_id=parent_id))
+
+    response = client.get("/collections")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/json"
+    expected = "[" + "".join(
+        f'{{"id":"{collection_id}","name":"L{level}",'
+        f'"parent_id":{"null" if level == 0 else f"{chr(34)}{ids[level - 1]}{chr(34)}"},'
+        '"children":['
+        for level, collection_id in enumerate(ids)
+    ) + "]}" * depth + "]"
+    assert response.text == expected
+
+    response = client.patch(f"/collections/{ids[0]}", json={"parent_id": ids[-1]})
+    assert response.status_code == 400
+    assert client.delete(f"/collections/{ids[-1]}").status_code == 204
+
+
+def test_list_response_schema_is_documented_in_openapi(client):
+    spec = client.get("/openapi.json").json()
+    schema = spec["paths"]["/collections"]["get"]["responses"]["200"]["content"][
+        "application/json"
+    ]["schema"]
+    assert schema["type"] == "array"
+    assert schema["items"] == {"$ref": "#/components/schemas/CollectionTreeNode"}
+    node_schema = spec["components"]["schemas"]["CollectionTreeNode"]
+    assert set(node_schema["required"]) == {"id", "name", "parent_id", "children"}
+    assert node_schema["properties"]["children"]["items"] == {
+        "$ref": "#/components/schemas/CollectionTreeNode"
+    }

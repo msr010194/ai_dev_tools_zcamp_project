@@ -1,6 +1,8 @@
 """Request and response models for the Collections API."""
 
-from typing import Annotated, Any, Self
+import json
+from collections.abc import Iterator
+from typing import Annotated, Any, Self, TypedDict
 
 from pydantic import BaseModel, ConfigDict, StringConstraints, field_validator, model_validator
 
@@ -49,7 +51,50 @@ class CollectionOut(BaseModel):
 
 
 class CollectionTreeNode(BaseModel):
+    """Documents the `GET /collections` node shape in OpenAPI.
+
+    The endpoint itself returns `CollectionTree` dicts encoded by `dump_tree_json`, because
+    Pydantic's recursive serializer fails on deep (about 99+ levels) trees.
+    """
+
     id: str
     name: str
     parent_id: str | None
     children: list["CollectionTreeNode"]
+
+
+class CollectionTree(TypedDict):
+    """Plain-dict tree node with the same fields as `CollectionTreeNode`."""
+
+    id: str
+    name: str
+    parent_id: str | None
+    children: list["CollectionTree"]
+
+
+def dump_tree_json(roots: list[CollectionTree]) -> str:
+    """Encode a tree as compact JSON without recursion, so any depth works."""
+    parts = ["["]
+    pending: list[Iterator[CollectionTree]] = [iter(roots)]
+    needs_comma = [False]
+    while pending:
+        node = next(pending[-1], None)
+        if node is None:
+            pending.pop()
+            needs_comma.pop()
+            parts.append("]}" if pending else "]")
+            continue
+        if needs_comma[-1]:
+            parts.append(",")
+        needs_comma[-1] = True
+        parts.append(
+            f'{{"id":{_json_scalar(node["id"])},"name":{_json_scalar(node["name"])},'
+            f'"parent_id":{_json_scalar(node["parent_id"])},"children":['
+        )
+        pending.append(iter(node["children"]))
+        needs_comma.append(False)
+    return "".join(parts)
+
+
+def _json_scalar(value: str | None) -> str:
+    return json.dumps(value, ensure_ascii=False)

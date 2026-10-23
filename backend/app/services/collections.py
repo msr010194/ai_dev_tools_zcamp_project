@@ -1,13 +1,12 @@
 """Collection use cases: the tree view and the add/rename/move/delete rules."""
 
 import uuid
-from collections import defaultdict
 from collections.abc import Callable
 from typing import Protocol
 
 from app.models.collection import Collection
 from app.repositories.base import Identifiable, Repository
-from app.schemas.collections import CollectionTreeNode
+from app.schemas.collections import CollectionTree
 
 
 class CollectionMember(Identifiable, Protocol):
@@ -61,23 +60,21 @@ class CollectionService:
         self._notes = notes
         self._new_id = id_factory
 
-    def list_tree(self) -> list[CollectionTreeNode]:
-        children_of: dict[str | None, list[Collection]] = defaultdict(list)
-        for collection in self._collections.list():
-            children_of[collection.parent_id].append(collection)
-
-        def build(parent_id: str | None) -> list[CollectionTreeNode]:
-            return [
-                CollectionTreeNode(
-                    id=child.id,
-                    name=child.name,
-                    parent_id=child.parent_id,
-                    children=build(child.id),
-                )
-                for child in sorted(children_of.get(parent_id, []), key=_sort_key)
-            ]
-
-        return build(None)
+    def list_tree(self) -> list[CollectionTree]:
+        """Build the nested tree without recursion, so arbitrarily deep chains work."""
+        collections = sorted(self._collections.list(), key=_sort_key)
+        nodes: dict[str, CollectionTree] = {
+            c.id: {"id": c.id, "name": c.name, "parent_id": c.parent_id, "children": []}
+            for c in collections
+        }
+        roots: list[CollectionTree] = []
+        for collection in collections:
+            node = nodes[collection.id]
+            if collection.parent_id is None:
+                roots.append(node)
+            elif collection.parent_id in nodes:
+                nodes[collection.parent_id]["children"].append(node)
+        return roots
 
     def create(self, name: str, parent_id: str | None = None) -> Collection:
         self._require_parent(parent_id)

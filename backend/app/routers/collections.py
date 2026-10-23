@@ -10,6 +10,7 @@ from app.schemas.collections import (
     CollectionOut,
     CollectionTreeNode,
     CollectionUpdate,
+    dump_tree_json,
 )
 from app.services.collections import (
     CollectionCycleError,
@@ -39,9 +40,10 @@ def _raise_http(error: CollectionError) -> NoReturn:
 
 
 @router.get("", response_model=list[CollectionTreeNode])
-def list_collections(service: Service) -> list[CollectionTreeNode]:
+def list_collections(service: Service) -> Response:
     """Return all collections as a tree; siblings are sorted by name, case-insensitively."""
-    return service.list_tree()
+    # Encoded directly: Pydantic's recursive serializer fails on deep trees.
+    return Response(content=dump_tree_json(service.list_tree()), media_type="application/json")
 
 
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=CollectionOut)
