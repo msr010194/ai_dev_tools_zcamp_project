@@ -3,7 +3,9 @@
 import builtins
 from collections.abc import Hashable
 from copy import deepcopy
+from typing import Any
 
+from app.models.collection import Collection
 from app.repositories.base import Identifiable, Repository
 
 
@@ -41,3 +43,8 @@ class InMemoryStore:
 
     Domain tasks add one repository attribute per entity here.
     """
+
+    def __init__(self) -> None:
+        self.collections: InMemoryRepository[Collection] = InMemoryRepository()
+        # Stays empty until the Note entity exists; anything stored here must have a `collection_id`.
+        self.notes: InMemoryRepository[Any] = InMemoryRepository()
