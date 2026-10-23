@@ -10,16 +10,35 @@ export default function TagsPage() {
   const [newName, setNewName] = useState("");
   const [editing, setEditing] = useState<{ id: string; name: string } | null>(null);
   const [message, setMessage] = useState<{ key: string; text: string } | null>(null);
+  const [loadError, setLoadError] = useState("");
 
+  // On a failed load the list is hidden rather than left stale.
   const refresh = useCallback(async () => {
-    const [t, n] = await Promise.all([api.listTags(), api.listNotes()]);
-    setTags(t);
-    setNotes(n);
+    try {
+      const [t, n] = await Promise.all([api.listTags(), api.listNotes()]);
+      setTags(t);
+      setNotes(n);
+      setLoadError("");
+    } catch (err) {
+      setTags(null);
+      setLoadError(err instanceof Error ? err.message : "Something went wrong");
+    }
   }, [api]);
   useEffect(() => {
     refresh();
   }, [refresh]);
 
+  if (loadError) {
+    return (
+      <>
+        <h1>Tags</h1>
+        <p role="alert">Could not load tags: {loadError}</p>
+        <button type="button" onClick={() => refresh()}>
+          Retry
+        </button>
+      </>
+    );
+  }
   if (!tags) return <h1>Tags</h1>;
 
   const check = (key: string, raw: string, excludeId?: string): string | null => {

@@ -140,3 +140,26 @@ describe("rename", () => {
     expect((await api.listTags()).map((t) => t.name)).toContain("work");
   });
 });
+
+describe("load failures", () => {
+  test("a failed initial load shows an error and Retry loads the list", async () => {
+    vi.spyOn(api, "listTags").mockRejectedValueOnce(new Error("offline"));
+    renderWithApp(<TagsPage />, api);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not load tags: offline");
+    expect(screen.queryByText("No tags yet")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByRole("link", { name: "work" })).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  test("a failed reload after a successful create shows an error instead of a stale list", async () => {
+    await show();
+    vi.spyOn(api, "listNotes").mockRejectedValueOnce(new Error("offline"));
+    newName("zeta");
+    submitNew();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not load tags: offline");
+    expect(screen.queryByRole("link", { name: "work" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByRole("link", { name: "zeta" })).toBeInTheDocument();
+  });
+});
