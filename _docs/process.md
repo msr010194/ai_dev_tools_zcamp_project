@@ -9,3 +9,5 @@ Roles
 - PM - grooms a task before anyone implements it, follows _docs/team/pm.md
 
 - SWE - implements one groomed task, follows _docs/team/swe.md
+
+- QA - checks the result against the acceptance criteria, follows _docs/team/qa.md
