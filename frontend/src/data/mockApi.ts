@@ -65,7 +65,13 @@ export function createMockApi(): DataApi {
       return n && { ...n };
     },
     async createNote(note) {
-      const n = { ...note, id: nextId(), createdAt: new Date().toISOString() };
+      const n: Note = {
+        ...note,
+        id: nextId(),
+        createdAt: new Date().toISOString(),
+        lastResurfacedAt: null,
+        resurfaceCount: 0,
+      };
       notes.push(n);
       return { ...n };
     },
@@ -77,6 +83,11 @@ export function createMockApi(): DataApi {
     async deleteNote(id) {
       find(notes, id, "Note");
       notes.splice(notes.findIndex((n) => n.id === id), 1);
+    },
+    async markResurfaced(id) {
+      const n = find(notes, id, "Note");
+      n.lastResurfacedAt = new Date().toISOString();
+      n.resurfaceCount += 1;
     },
   };
 }

@@ -1,5 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import type { NoteType } from "./data/types";
+import ResurfacingPanel from "./ResurfacingPanel";
 
 const captureTypes: { type: NoteType; label: string }[] = [
   { type: "idea", label: "Idea" },
@@ -43,6 +44,7 @@ export default function HomePage() {
         </h2>
         <p>Keep a memory worth remembering.</p>
       </section>
+      <ResurfacingPanel />
     </>
   );
 }

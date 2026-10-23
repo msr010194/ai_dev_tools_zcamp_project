@@ -18,10 +18,11 @@ export interface Note {
   collectionId: string;
   tagIds: string[];
   createdAt: string;
+  lastResurfacedAt: string | null;
+  resurfaceCount: number;
 }
 
-export type NewNote = Omit<Note, "id" | "createdAt">;
-
+export type NewNote = Omit<Note, "id" | "createdAt" | "lastResurfacedAt" | "resurfaceCount">;
 export interface DataApi {
   listCollections(): Promise<Collection[]>;
   createCollection(name: string, parentId: string | null): Promise<Collection>;
@@ -38,4 +39,5 @@ export interface DataApi {
   createNote(note: NewNote): Promise<Note>;
   updateNote(id: string, patch: Partial<NewNote>): Promise<Note>;
   deleteNote(id: string): Promise<void>;
+  markResurfaced(id: string): Promise<void>;
 }
