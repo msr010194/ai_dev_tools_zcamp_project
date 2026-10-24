@@ -6,6 +6,7 @@ from fastapi import Depends, Request
 
 from app.repositories.memory import InMemoryStore
 from app.services.collections import CollectionService
+from app.services.notes import NoteService
 from app.services.tags import TagService
 from app.settings import Settings
 
@@ -28,3 +29,9 @@ def get_tag_service(
     store: Annotated[InMemoryStore, Depends(get_store)],
 ) -> TagService:
     return TagService(store.tags)
+
+
+def get_note_service(
+    store: Annotated[InMemoryStore, Depends(get_store)],
+) -> NoteService:
+    return NoteService(store.notes, store.collections, store.tags)

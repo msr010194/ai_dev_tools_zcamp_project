@@ -3,9 +3,9 @@
 import builtins
 from collections.abc import Hashable
 from copy import deepcopy
-from typing import Any
 
 from app.models.collection import Collection
+from app.models.note import Note
 from app.models.tag import Tag
 from app.repositories.base import Identifiable, Repository
 
@@ -47,6 +47,5 @@ class InMemoryStore:
 
     def __init__(self) -> None:
         self.collections: InMemoryRepository[Collection] = InMemoryRepository()
-        # Stays empty until the Note entity exists; anything stored here must have a `collection_id`.
-        self.notes: InMemoryRepository[Any] = InMemoryRepository()
+        self.notes: InMemoryRepository[Note] = InMemoryRepository()
         self.tags: InMemoryRepository[Tag] = InMemoryRepository()
