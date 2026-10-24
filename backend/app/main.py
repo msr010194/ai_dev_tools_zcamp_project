@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 
 from app.repositories.memory import InMemoryStore
-from app.routers import collections, health
+from app.routers import collections, health, tags
 from app.settings import Settings
 
 
@@ -13,6 +13,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.store = InMemoryStore()
     app.include_router(health.router)
     app.include_router(collections.router)
+    app.include_router(tags.router)
     return app
 
 
