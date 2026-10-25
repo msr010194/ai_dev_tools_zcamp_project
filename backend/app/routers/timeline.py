@@ -18,16 +18,35 @@ DEFAULT_PAGE_SIZE = 20
 MAX_PAGE_SIZE = 100
 
 
-@router.get("", response_model=TimelinePageOut)
+@router.get(
+    "",
+    response_model=TimelinePageOut,
+    operation_id="getTimeline",
+    summary="List notes newest first, one page at a time",
+)
 def get_timeline(
     service: Service,
-    limit: Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)] = DEFAULT_PAGE_SIZE,
-    cursor: str | None = None,
-    collection_id: str | None = None,
-    include_descendants: bool = False,
-    note_type: Annotated[NoteType | None, Query(alias="type")] = None,
-    tag_id: str | None = None,
-    untagged: bool = False,
+    limit: Annotated[
+        int, Query(ge=1, le=MAX_PAGE_SIZE, description="Page size, 1 to 100.")
+    ] = DEFAULT_PAGE_SIZE,
+    cursor: Annotated[
+        str | None,
+        Query(description="`next_cursor` from the previous page; only valid with the same filters."),
+    ] = None,
+    collection_id: Annotated[
+        str | None, Query(description="Only notes in this collection.")
+    ] = None,
+    include_descendants: Annotated[
+        bool,
+        Query(description="With `collection_id`: also notes in all nested sub-collections."),
+    ] = False,
+    note_type: Annotated[
+        NoteType | None, Query(alias="type", description="Only notes of this Type.")
+    ] = None,
+    tag_id: Annotated[str | None, Query(description="Only notes that have this tag.")] = None,
+    untagged: Annotated[
+        bool, Query(description="Only notes without tags; cannot be combined with `tag_id`.")
+    ] = False,
 ) -> dict[str, Any]:
     filters = TimelineFilters(
         collection_id=collection_id,

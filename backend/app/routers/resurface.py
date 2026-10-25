@@ -14,16 +14,29 @@ router = APIRouter(tags=["resurfacing"])
 Service = Annotated[ResurfaceService, Depends(get_resurface_service)]
 
 
-@router.get("/resurface", response_model=ResurfaceOut)
+@router.get(
+    "/resurface",
+    response_model=ResurfaceOut,
+    operation_id="getResurfacedNotes",
+    summary="Pick up to three older notes to revisit",
+)
 def get_resurfaced_notes(
     service: Service,
-    exclude: Annotated[list[str] | None, Query()] = None,
+    exclude: Annotated[
+        list[str] | None,
+        Query(description="Note ids to avoid, e.g. the previously shown set. Repeatable."),
+    ] = None,
 ) -> dict[str, Any]:
     notes = service.pick(frozenset(exclude or ()))
     return {"items": [to_note_out(note) for note in notes]}
 
 
-@router.post("/notes/{note_id}/resurfaced", response_model=NoteOut)
+@router.post(
+    "/notes/{note_id}/resurfaced",
+    response_model=NoteOut,
+    operation_id="markNoteResurfaced",
+    summary="Record that a note was shown",
+)
 def mark_note_resurfaced(note_id: str, service: Service) -> NoteOutBase:
     try:
         note = service.mark_resurfaced(note_id)

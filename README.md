@@ -18,3 +18,15 @@ cd frontend
 npm install
 npm test
 ```
+
+## API contract
+
+The OpenAPI spec in [`contract/openapi.json`](contract/openapi.json) is generated from the
+backend and committed. After changing any endpoint or schema, regenerate it:
+
+```
+cd backend
+uv run python -m scripts.export_openapi
+```
+
+`uv run pytest` fails if the committed spec is out of date.

@@ -48,7 +48,13 @@ def _raise_http(error: NoteError) -> NoReturn:
     raise HTTPException(status_code=_STATUS_FOR_ERROR[type(error)], detail=str(error)) from error
 
 
-@router.post("", status_code=status.HTTP_201_CREATED, response_model=NoteOut)
+@router.post(
+    "",
+    status_code=status.HTTP_201_CREATED,
+    response_model=NoteOut,
+    operation_id="createNote",
+    summary="Create a note",
+)
 def create_note(payload: NoteCreate, service: Service) -> NoteOutBase:
     fields = payload.model_dump(exclude_unset=True, exclude=set(SHARED_CREATE_FIELDS))
     try:
@@ -60,7 +66,7 @@ def create_note(payload: NoteCreate, service: Service) -> NoteOutBase:
     return to_note_out(note)
 
 
-@router.get("/{note_id}", response_model=NoteOut)
+@router.get("/{note_id}", response_model=NoteOut, operation_id="getNote", summary="Get a note")
 def get_note(note_id: str, service: Service) -> NoteOutBase:
     try:
         note = service.get(note_id)
@@ -69,7 +75,9 @@ def get_note(note_id: str, service: Service) -> NoteOutBase:
     return to_note_out(note)
 
 
-@router.patch("/{note_id}", response_model=NoteOut)
+@router.patch(
+    "/{note_id}", response_model=NoteOut, operation_id="updateNote", summary="Update part of a note"
+)
 def update_note(note_id: str, payload: NoteUpdate, service: Service) -> NoteOutBase:
     changes = payload.model_dump(include=payload.model_fields_set)
     try:
@@ -79,7 +87,13 @@ def update_note(note_id: str, payload: NoteUpdate, service: Service) -> NoteOutB
     return to_note_out(note)
 
 
-@router.delete("/{note_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+@router.delete(
+    "/{note_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+    operation_id="deleteNote",
+    summary="Delete a note",
+)
 def delete_note(note_id: str, service: Service) -> Response:
     try:
         service.delete(note_id)

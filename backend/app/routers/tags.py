@@ -22,12 +22,18 @@ def _raise_http(error: TagError) -> NoReturn:
     raise HTTPException(status_code=_STATUS_FOR_ERROR[type(error)], detail=str(error)) from error
 
 
-@router.get("", response_model=list[TagOut])
+@router.get("", response_model=list[TagOut], operation_id="listTags", summary="List tags")
 def list_tags(service: Service) -> list[TagOut]:
     return [TagOut.model_validate(tag.model_dump()) for tag in service.list_tags()]
 
 
-@router.post("", status_code=status.HTTP_201_CREATED, response_model=TagOut)
+@router.post(
+    "",
+    status_code=status.HTTP_201_CREATED,
+    response_model=TagOut,
+    operation_id="createTag",
+    summary="Create a tag",
+)
 def create_tag(body: TagCreate, service: Service) -> TagOut:
     try:
         tag = service.create(body.name)
@@ -36,7 +42,7 @@ def create_tag(body: TagCreate, service: Service) -> TagOut:
     return TagOut.model_validate(tag.model_dump())
 
 
-@router.patch("/{tag_id}", response_model=TagOut)
+@router.patch("/{tag_id}", response_model=TagOut, operation_id="renameTag", summary="Rename a tag")
 def rename_tag(tag_id: str, body: TagUpdate, service: Service) -> TagOut:
     try:
         tag = service.rename(tag_id, body.name)

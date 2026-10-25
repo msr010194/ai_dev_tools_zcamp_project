@@ -1,0 +1,2 @@
+# Generated contract files are compared byte-for-byte after regeneration; keep them LF everywhere.
+contract/openapi.json text eol=lf

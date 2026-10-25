@@ -1,8 +1,14 @@
+"""Liveness check."""
+
 from fastapi import APIRouter
 
-router = APIRouter()
+from app.schemas.health import Health
+
+router = APIRouter(tags=["health"])
 
 
-@router.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+@router.get(
+    "/health", response_model=Health, operation_id="getHealth", summary="Check that the API is up"
+)
+def health() -> Health:
+    return Health(status="ok")

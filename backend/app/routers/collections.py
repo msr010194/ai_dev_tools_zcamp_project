@@ -39,14 +39,25 @@ def _raise_http(error: CollectionError) -> NoReturn:
     raise HTTPException(status_code=_STATUS_FOR_ERROR[type(error)], detail=str(error)) from error
 
 
-@router.get("", response_model=list[CollectionTreeNode])
+@router.get(
+    "",
+    response_model=list[CollectionTreeNode],
+    operation_id="listCollections",
+    summary="List collections as a tree",
+)
 def list_collections(service: Service) -> Response:
     """Return all collections as a tree; siblings are sorted by name, case-insensitively."""
     # Encoded directly: Pydantic's recursive serializer fails on deep trees.
     return Response(content=dump_tree_json(service.list_tree()), media_type="application/json")
 
 
-@router.post("", status_code=status.HTTP_201_CREATED, response_model=CollectionOut)
+@router.post(
+    "",
+    status_code=status.HTTP_201_CREATED,
+    response_model=CollectionOut,
+    operation_id="createCollection",
+    summary="Create a collection",
+)
 def create_collection(body: CollectionCreate, service: Service) -> CollectionOut:
     try:
         collection = service.create(body.name, body.parent_id)
@@ -55,7 +66,12 @@ def create_collection(body: CollectionCreate, service: Service) -> CollectionOut
     return CollectionOut.model_validate(collection.model_dump())
 
 
-@router.patch("/{collection_id}", response_model=CollectionOut)
+@router.patch(
+    "/{collection_id}",
+    response_model=CollectionOut,
+    operation_id="updateCollection",
+    summary="Rename or move a collection",
+)
 def update_collection(
     collection_id: str, body: CollectionUpdate, service: Service
 ) -> CollectionOut:
@@ -73,6 +89,8 @@ def update_collection(
     "/{collection_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     response_class=Response,
+    operation_id="deleteCollection",
+    summary="Delete an empty collection",
     description=(
         "Delete an empty collection. A collection that still has child collections or notes "
         "is not deleted: the request is rejected with 409 Conflict. Unknown ids return 404."
