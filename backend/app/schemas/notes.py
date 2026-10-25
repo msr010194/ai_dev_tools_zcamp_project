@@ -1,22 +1,28 @@
 """Request and response models for `/notes`, as discriminated unions on `type` (one variant per Type)."""
 
-from datetime import datetime
-from typing import Annotated, Any, Literal
+from datetime import UTC, datetime
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import (
     AfterValidator,
+    AwareDatetime,
     BaseModel,
+    BeforeValidator,
     ConfigDict,
     Field,
+    StrictBool,
     StrictStr,
     StringConstraints,
     TypeAdapter,
     field_validator,
+    model_validator,
 )
 
-from app.models.note import Note, NoteType
+from app.models.note import Note, NoteType, RetroPeriod
 
 MAX_BODY_LENGTH = 100_000
+MAX_MOOD_LENGTH = 100
+MAX_PROMPT_LENGTH = 500
 MAX_MEMORY_TEXT_LENGTH = 200
 
 
@@ -32,15 +38,30 @@ def _not_null(value: Any) -> Any:
     return value
 
 
+def _require_str(value: Any) -> Any:
+    """Reject numbers etc. that Pydantic would otherwise coerce into dates."""
+    if not isinstance(value, str):
+        raise ValueError("must be a string")
+    return value
+
+
+def _to_utc(value: datetime) -> datetime:
+    return value.astimezone(UTC)
+
+
 def _text(max_length: int) -> StringConstraints:
     return StringConstraints(min_length=1, max_length=max_length, strict=True)
 
 
 # Free text is stored exactly as sent (not trimmed) but must contain more than whitespace.
 NoteBody = Annotated[str, _text(MAX_BODY_LENGTH), AfterValidator(_not_blank)]
+Mood = Annotated[str, _text(MAX_MOOD_LENGTH), AfterValidator(_not_blank)]
+Prompt = Annotated[str, _text(MAX_PROMPT_LENGTH), AfterValidator(_not_blank)]
 MemoryText = Annotated[str, _text(MAX_MEMORY_TEXT_LENGTH), AfterValidator(_not_blank)]
 CollectionId = Annotated[str, StringConstraints(min_length=1, strict=True)]
 TagId = StrictStr
+# An ISO 8601 string with a timezone offset, normalised to UTC.
+UtcDatetime = Annotated[AwareDatetime, BeforeValidator(_require_str), AfterValidator(_to_utc)]
 
 SHARED_CREATE_FIELDS = frozenset({"type", "body", "collection_id", "tag_ids"})
 
@@ -58,6 +79,22 @@ class NoteCreateBase(BaseModel):
 
 class JournalNoteCreate(NoteCreateBase):
     type: Literal["journal"]
+    entry_date: UtcDatetime | None = None
+    mood: Mood | None = None
+    prompt: Prompt | None = None
+    is_retrospective: StrictBool | None = None
+    period: RetroPeriod | None = None
+
+    @field_validator("entry_date", "is_retrospective", mode="before")
+    @classmethod
+    def _required_not_null(cls, value: Any) -> Any:
+        return _not_null(value)
+
+    @model_validator(mode="after")
+    def _period_needs_retrospective(self) -> Self:
+        if self.period is not None and not self.is_retrospective:
+            raise ValueError("Period requires is_retrospective")
+        return self
 
 
 class IdeaNoteCreate(NoteCreateBase):
@@ -97,10 +134,17 @@ class NoteUpdate(BaseModel):
     body: NoteBody | None = None
     collection_id: CollectionId | None = None
     tag_ids: list[TagId] | None = None
+    entry_date: UtcDatetime | None = None
+    mood: Mood | None = None
+    prompt: Prompt | None = None
+    is_retrospective: StrictBool | None = None
+    period: RetroPeriod | None = None
     when: MemoryText | None = None
     where: MemoryText | None = None
 
-    @field_validator("type", "body", "collection_id", "tag_ids", mode="before")
+    @field_validator(
+        "type", "body", "collection_id", "tag_ids", "entry_date", "is_retrospective", mode="before"
+    )
     @classmethod
     def _required_not_null(cls, value: Any) -> Any:
         return _not_null(value)
@@ -121,6 +165,11 @@ class NoteOutBase(BaseModel):
 
 class JournalNoteOut(NoteOutBase):
     type: Literal["journal"]
+    entry_date: datetime
+    mood: str | None
+    prompt: str | None
+    is_retrospective: bool
+    period: RetroPeriod | None
 
 
 class IdeaNoteOut(NoteOutBase):

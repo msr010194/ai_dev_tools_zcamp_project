@@ -6,6 +6,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 NoteType = Literal["journal", "idea", "reference", "plan", "memory"]
+RetroPeriod = Literal["weekly", "monthly"]
 
 
 class Note(BaseModel):
@@ -21,6 +22,11 @@ class Note(BaseModel):
 
 class JournalNote(Note):
     type: Literal["journal"] = "journal"
+    entry_date: datetime
+    mood: str | None = None
+    prompt: str | None = None
+    is_retrospective: bool = False
+    period: RetroPeriod | None = None
 
 
 class IdeaNote(Note):

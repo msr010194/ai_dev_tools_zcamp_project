@@ -22,7 +22,7 @@ FIELDS = {
     "resurface_count",
 }
 OWN_FIELDS: dict[str, set[str]] = {
-    "journal": set(),
+    "journal": {"entry_date", "mood", "prompt", "is_retrospective", "period"},
     "idea": set(),
     "reference": set(),
     "plan": set(),

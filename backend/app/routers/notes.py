@@ -23,6 +23,8 @@ from app.services.notes import (
     NoteService,
     NoteTagNotFoundError,
     NoteTypeChangeError,
+    PeriodRequiresRetrospectiveError,
+    PromptLockedError,
 )
 
 router = APIRouter(prefix="/notes", tags=["notes"])
@@ -37,6 +39,8 @@ _STATUS_FOR_ERROR: dict[type[NoteError], int] = {
     NoteTypeChangeError: status.HTTP_422_UNPROCESSABLE_CONTENT,
     EmptyNoteUpdateError: status.HTTP_422_UNPROCESSABLE_CONTENT,
     FieldNotAllowedError: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    PromptLockedError: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    PeriodRequiresRetrospectiveError: status.HTTP_422_UNPROCESSABLE_CONTENT,
 }
 
 

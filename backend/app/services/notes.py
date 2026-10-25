@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.models.collection import Collection
-from app.models.note import NOTE_CLASSES, Note, NoteType, type_fields
+from app.models.note import NOTE_CLASSES, JournalNote, Note, NoteType, type_fields
 from app.models.tag import Tag
 from app.repositories.base import Repository
 
@@ -48,6 +48,14 @@ class FieldNotAllowedError(NoteError):
     message = "Field not allowed for this note type"
 
 
+class PromptLockedError(NoteError):
+    message = "Prompt cannot be changed once set"
+
+
+class PeriodRequiresRetrospectiveError(NoteError):
+    message = "Period requires is_retrospective"
+
+
 class NoteService:
     def __init__(
         self,
@@ -83,12 +91,15 @@ class NoteService:
             raise FieldNotAllowedError()
         self._require_collection(collection_id)
         self._check_tags(tag_ids)
+        created_at = self._clock()
+        if note_type == "journal" and fields.get("entry_date") is None:
+            fields["entry_date"] = created_at
         note = NOTE_CLASSES[note_type](
             id=self._id_factory(),
             body=body,
             collection_id=collection_id,
             tag_ids=list(tag_ids),
-            created_at=self._clock(),
+            created_at=created_at,
             **fields,
         )
         return self._notes.add(note)
@@ -108,6 +119,8 @@ class NoteService:
         if "tag_ids" in updates:
             self._check_tags(updates["tag_ids"])
             updates["tag_ids"] = list(updates["tag_ids"])
+        if isinstance(note, JournalNote):
+            self._check_journal_update(note, updates)
         updated = type(note).model_validate({**note.model_dump(), **updates})
         stored = self._notes.update(updated)
         if stored is None:
@@ -121,6 +134,16 @@ class NoteService:
     def _require_collection(self, collection_id: str) -> None:
         if self._collections.get(collection_id) is None:
             raise NoteCollectionNotFoundError()
+
+    @staticmethod
+    def _check_journal_update(note: JournalNote, updates: Mapping[str, Any]) -> None:
+        """A prompt can be set once; the resulting note may only have a period if it is a retrospective."""
+        if "prompt" in updates and note.prompt is not None and updates["prompt"] != note.prompt:
+            raise PromptLockedError()
+        is_retrospective = updates.get("is_retrospective", note.is_retrospective)
+        period = updates.get("period", note.period)
+        if period is not None and not is_retrospective:
+            raise PeriodRequiresRetrospectiveError()
 
     def _check_tags(self, tag_ids: Sequence[str]) -> None:
         if len(set(tag_ids)) != len(tag_ids):
