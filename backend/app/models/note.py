@@ -1,13 +1,14 @@
 """Note entities: the shared `Note` fields plus one subclass per Type that adds that Type's own fields."""
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 NoteType = Literal["journal", "idea", "reference", "plan", "memory"]
 RetroPeriod = Literal["weekly", "monthly"]
 ReferenceKind = Literal["written", "visual", "audio"]
+PlanState = Literal["not_started", "in_progress", "done", "abandoned"]
 
 
 class Note(BaseModel):
@@ -40,8 +41,18 @@ class ReferenceNote(Note):
     link: str | None = None
 
 
+class ChecklistItem(BaseModel):
+    """One Plan checklist item; its position is its index in the plan's `checklist`."""
+
+    text: str
+    done: bool = False
+
+
 class PlanNote(Note):
     type: Literal["plan"] = "plan"
+    target_date: date | None = None
+    state: PlanState = "not_started"
+    checklist: list[ChecklistItem] = Field(default_factory=list)
 
 
 class MemoryNote(Note):

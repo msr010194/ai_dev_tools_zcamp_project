@@ -1,6 +1,7 @@
 """Request and response models for `/notes`, as discriminated unions on `type` (one variant per Type)."""
 
-from datetime import UTC, datetime
+import re
+from datetime import UTC, date, datetime
 from typing import Annotated, Any, Literal, Self
 from urllib.parse import urlsplit
 
@@ -19,13 +20,17 @@ from pydantic import (
     model_validator,
 )
 
-from app.models.note import Note, NoteType, ReferenceKind, RetroPeriod
+from app.models.note import Note, NoteType, PlanState, ReferenceKind, RetroPeriod
 
 MAX_BODY_LENGTH = 100_000
 MAX_MOOD_LENGTH = 100
 MAX_PROMPT_LENGTH = 500
 MAX_MEMORY_TEXT_LENGTH = 200
 MAX_LINK_LENGTH = 2048
+MAX_CHECKLIST_ITEMS = 100
+MAX_CHECKLIST_ITEM_LENGTH = 500
+
+_ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
 def _not_blank(value: str) -> str:
@@ -49,6 +54,13 @@ def _require_str(value: Any) -> Any:
 
 def _to_utc(value: datetime) -> datetime:
     return value.astimezone(UTC)
+
+
+def _iso_date_string(value: Any) -> Any:
+    """Only `YYYY-MM-DD` strings; Pydantic would otherwise also take datetimes and numbers."""
+    if not isinstance(value, str) or not _ISO_DATE.fullmatch(value):
+        raise ValueError("must be a date in YYYY-MM-DD format")
+    return value
 
 
 def _http_url(value: str) -> str:
@@ -75,12 +87,32 @@ Mood = Annotated[str, _text(MAX_MOOD_LENGTH), AfterValidator(_not_blank)]
 Prompt = Annotated[str, _text(MAX_PROMPT_LENGTH), AfterValidator(_not_blank)]
 MemoryText = Annotated[str, _text(MAX_MEMORY_TEXT_LENGTH), AfterValidator(_not_blank)]
 Link = Annotated[str, _text(MAX_LINK_LENGTH), AfterValidator(_http_url)]
+ChecklistItemText = Annotated[str, _text(MAX_CHECKLIST_ITEM_LENGTH), AfterValidator(_not_blank)]
+CalendarDate = Annotated[date, BeforeValidator(_iso_date_string)]
 CollectionId = Annotated[str, StringConstraints(min_length=1, strict=True)]
 TagId = StrictStr
 # An ISO 8601 string with a timezone offset, normalised to UTC.
 UtcDatetime = Annotated[AwareDatetime, BeforeValidator(_require_str), AfterValidator(_to_utc)]
 
 SHARED_CREATE_FIELDS = frozenset({"type", "body", "collection_id", "tag_ids"})
+
+
+class ChecklistItemIn(BaseModel):
+    """A checklist item as sent by the client; its position is its index in the list."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    text: ChecklistItemText
+    done: StrictBool = False
+
+
+Checklist = Annotated[list[ChecklistItemIn], Field(max_length=MAX_CHECKLIST_ITEMS)]
+
+
+class ChecklistItemOut(BaseModel):
+    text: str
+    done: bool
+    position: int
 
 
 class NoteCreateBase(BaseModel):
@@ -131,6 +163,14 @@ class ReferenceNoteCreate(NoteCreateBase):
 
 class PlanNoteCreate(NoteCreateBase):
     type: Literal["plan"]
+    target_date: CalendarDate | None = None
+    state: PlanState | None = None
+    checklist: Checklist | None = None
+
+    @field_validator("state", "checklist", mode="before")
+    @classmethod
+    def _required_not_null(cls, value: Any) -> Any:
+        return _not_null(value)
 
 
 class MemoryNoteCreate(NoteCreateBase):
@@ -165,6 +205,9 @@ class NoteUpdate(BaseModel):
     period: RetroPeriod | None = None
     sub_kind: ReferenceKind | None = None
     link: Link | None = None
+    target_date: CalendarDate | None = None
+    state: PlanState | None = None
+    checklist: Checklist | None = None
     when: MemoryText | None = None
     where: MemoryText | None = None
 
@@ -176,6 +219,8 @@ class NoteUpdate(BaseModel):
         "entry_date",
         "is_retrospective",
         "sub_kind",
+        "state",
+        "checklist",
         mode="before",
     )
     @classmethod
@@ -217,6 +262,9 @@ class ReferenceNoteOut(NoteOutBase):
 
 class PlanNoteOut(NoteOutBase):
     type: Literal["plan"]
+    target_date: date | None
+    state: PlanState
+    checklist: list[ChecklistItemOut]
 
 
 class MemoryNoteOut(NoteOutBase):
@@ -234,4 +282,9 @@ _note_out_adapter: TypeAdapter[Any] = TypeAdapter(NoteOut)
 
 
 def to_note_out(note: Note) -> NoteOutBase:
-    return _note_out_adapter.validate_python(note.model_dump())
+    data = note.model_dump()
+    if "checklist" in data:
+        data["checklist"] = [
+            {**item, "position": position} for position, item in enumerate(data["checklist"])
+        ]
+    return _note_out_adapter.validate_python(data)

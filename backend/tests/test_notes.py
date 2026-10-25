@@ -25,7 +25,7 @@ OWN_FIELDS: dict[str, set[str]] = {
     "journal": {"entry_date", "mood", "prompt", "is_retrospective", "period"},
     "idea": set(),
     "reference": {"sub_kind", "link"},
-    "plan": set(),
+    "plan": {"target_date", "state", "checklist"},
     "memory": {"when", "where"},
 }
 TYPE_SPECIFIC_FIELDS = {
