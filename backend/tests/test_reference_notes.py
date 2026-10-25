@@ -3,6 +3,7 @@
 import pytest
 
 from tests.note_helpers import TYPES, create_note, get_note, make_collection, note_payload, patch_note
+from tests.error_helpers import error_body
 
 SUB_KINDS = ["written", "visual", "audio"]
 VALID_LINKS = [
@@ -180,5 +181,5 @@ def test_patch_reference_field_on_other_type(client, inbox, type_, field, value)
     note = create_note(client, inbox, type_)
     response = patch_note(client, note["id"], {field: value})
     assert response.status_code == 422
-    assert response.json() == {"detail": "Field not allowed for this note type"}
+    assert response.json() == error_body("field_not_allowed", "Field not allowed for this note type")
     assert get_note(client, note["id"]) == note

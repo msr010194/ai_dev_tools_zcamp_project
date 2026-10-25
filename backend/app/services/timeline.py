@@ -12,34 +12,37 @@ from app.models.collection import Collection
 from app.models.note import Note, NoteType
 from app.models.tag import Tag
 from app.repositories.base import Repository
+from app.services.errors import ServiceError
 
 _CHECKSUM_LENGTH = 16
 
 
-class TimelineError(Exception):
-    message = "Timeline error"
-
-    def __init__(self) -> None:
-        super().__init__(self.message)
+class TimelineError(ServiceError):
+    """Base class for timeline request errors."""
 
 
 class InvalidCursorError(TimelineError):
+    code = "invalid_cursor"
     message = "Invalid cursor"
 
 
 class TimelineCollectionNotFoundError(TimelineError):
+    code = "collection_not_found"
     message = "Collection not found"
 
 
 class TimelineTagNotFoundError(TimelineError):
+    code = "tag_not_found"
     message = "Tag not found"
 
 
 class DescendantsWithoutCollectionError(TimelineError):
+    code = "descendants_require_collection"
     message = "include_descendants requires collection_id"
 
 
 class UntaggedWithTagError(TimelineError):
+    code = "untagged_with_tag"
     message = "untagged cannot be combined with tag_id"
 
 

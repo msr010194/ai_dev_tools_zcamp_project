@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 import pytest
 
 from tests.note_helpers import TYPES, create_note, get_note, make_collection, note_payload, patch_note
+from tests.error_helpers import error_body
 
 OTHER_TYPES_FIELDS = {
     "entry_date": "2026-01-05T10:00:00Z",
@@ -123,7 +124,7 @@ def test_patch_memory_field_on_other_type_returns_422(client, inbox, type_, fiel
     created = create_note(client, inbox, type_)
     response = patch_note(client, created["id"], {field: "x", "body": "Changed"})
     assert response.status_code == 422
-    assert response.json() == {"detail": "Field not allowed for this note type"}
+    assert response.json() == error_body("field_not_allowed", "Field not allowed for this note type")
     assert get_note(client, created["id"]) == created
 
 
@@ -132,7 +133,7 @@ def test_patch_null_memory_field_on_other_type_returns_422(client, inbox, type_)
     created = create_note(client, inbox, type_)
     response = patch_note(client, created["id"], {"where": None})
     assert response.status_code == 422
-    assert response.json() == {"detail": "Field not allowed for this note type"}
+    assert response.json() == error_body("field_not_allowed", "Field not allowed for this note type")
 
 
 def test_rejected_memory_patch_changes_nothing(client, inbox):

@@ -9,22 +9,20 @@ from collections.abc import Callable
 
 from app.models.tag import Tag
 from app.repositories.base import Repository
+from app.services.errors import ServiceError
 
 
-class TagError(Exception):
-    """Base class for tag rule violations; `str(error)` is the client-facing message."""
-
-    message = "Tag error"
-
-    def __init__(self) -> None:
-        super().__init__(self.message)
+class TagError(ServiceError):
+    """Base class for tag rule violations."""
 
 
 class TagNotFoundError(TagError):
+    code = "tag_not_found"
     message = "Tag not found"
 
 
 class DuplicateTagNameError(TagError):
+    code = "duplicate_tag_name"
     message = "A tag with that name already exists"
 
 

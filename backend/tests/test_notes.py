@@ -9,6 +9,7 @@ import pytest
 from app.models.note import Note
 from app.repositories.memory import InMemoryRepository
 from app.schemas.notes import NoteCreate, NoteCreateBase, NoteOut, NoteOutBase
+from tests.error_helpers import error_body
 
 TYPES = ["journal", "idea", "reference", "plan", "memory"]
 FIELDS = {
@@ -195,7 +196,7 @@ def test_create_rejects_existing_collection_inside_a_list(client, inbox):
 def test_create_with_unknown_collection_returns_422(client):
     response = client.post("/notes", json=note_payload("no-such-collection"))
     assert response.status_code == 422
-    assert response.json() == {"detail": "Collection not found"}
+    assert response.json() == error_body("collection_not_found", "Collection not found")
 
 
 def test_create_in_nested_collection(client):
@@ -234,7 +235,7 @@ def test_duplicate_tag_ids_are_rejected(client, inbox):
     a = make_tag(client, "a")
     response = client.post("/notes", json=note_payload(inbox, tag_ids=[a, a]))
     assert response.status_code == 422
-    assert response.json() == {"detail": "Duplicate tag id"}
+    assert response.json() == error_body("duplicate_tag_id", "Duplicate tag id")
 
 
 def test_unknown_tag_is_rejected_and_not_created(client, inbox):
@@ -242,7 +243,7 @@ def test_unknown_tag_is_rejected_and_not_created(client, inbox):
     tags_before = client.get("/tags").json()
     response = client.post("/notes", json=note_payload(inbox, tag_ids=["new-tag"]))
     assert response.status_code == 422
-    assert response.json() == {"detail": "Tag not found"}
+    assert response.json() == error_body("tag_not_found", "Tag not found")
     assert client.get("/tags").json() == tags_before
 
 
@@ -288,7 +289,7 @@ def test_get_returns_the_created_note(client, inbox, type_):
 def test_get_unknown_note_returns_404(client):
     response = client.get(f"/notes/{uuid.uuid4()}")
     assert response.status_code == 404
-    assert response.json() == {"detail": "Note not found"}
+    assert response.json() == error_body("note_not_found", "Note not found")
 
 
 # --- Update -------------------------------------------------------------------------------------
@@ -324,7 +325,7 @@ def test_patch_with_no_fields_returns_422(client, inbox):
     created = create_note(client, inbox)
     response = client.patch(f"/notes/{created['id']}", json={})
     assert response.status_code == 422
-    assert response.json() == {"detail": "At least one field must be provided"}
+    assert response.json() == error_body("empty_update", "At least one field must be provided")
     assert get_note(client, created["id"]) == created
 
 
@@ -386,7 +387,7 @@ def test_patch_unknown_collection_returns_422_and_changes_nothing(client, inbox)
         f"/notes/{created['id']}", json={"body": "New", "collection_id": "no-such-collection"}
     )
     assert response.status_code == 422
-    assert response.json() == {"detail": "Collection not found"}
+    assert response.json() == error_body("collection_not_found", "Collection not found")
     assert get_note(client, created["id"]) == created
 
 
@@ -398,7 +399,7 @@ def test_patch_unknown_tag_returns_422_creates_no_tag_and_changes_nothing(client
         f"/notes/{created['id']}", json={"body": "New body", "tag_ids": [tag, "new-tag"]}
     )
     assert response.status_code == 422
-    assert response.json() == {"detail": "Tag not found"}
+    assert response.json() == error_body("tag_not_found", "Tag not found")
     assert client.get("/tags").json() == tags_before
     assert get_note(client, created["id"]) == created
 
@@ -408,7 +409,7 @@ def test_patch_duplicate_tag_ids_returns_422(client, inbox):
     created = create_note(client, inbox)
     response = client.patch(f"/notes/{created['id']}", json={"tag_ids": [tag, tag]})
     assert response.status_code == 422
-    assert response.json() == {"detail": "Duplicate tag id"}
+    assert response.json() == error_body("duplicate_tag_id", "Duplicate tag id")
     assert get_note(client, created["id"]) == created
 
 
@@ -452,7 +453,7 @@ def test_patch_different_type_returns_422(client, inbox, type_):
     other_type = TYPES[(TYPES.index(type_) + 1) % len(TYPES)]
     response = client.patch(f"/notes/{created['id']}", json={"type": other_type, "body": "New"})
     assert response.status_code == 422
-    assert response.json() == {"detail": "Note type cannot be changed"}
+    assert response.json() == error_body("note_type_change", "Note type cannot be changed")
     assert get_note(client, created["id"]) == created
 
 
@@ -467,7 +468,7 @@ def test_patch_keeps_id_and_created_at(client, inbox):
 def test_patch_unknown_note_returns_404(client, inbox):
     response = client.patch(f"/notes/{uuid.uuid4()}", json={"body": "Valid", "collection_id": inbox})
     assert response.status_code == 404
-    assert response.json() == {"detail": "Note not found"}
+    assert response.json() == error_body("note_not_found", "Note not found")
 
 
 # --- Delete -------------------------------------------------------------------------------------
@@ -483,13 +484,13 @@ def test_delete_note(client, inbox, type_):
 
     second = client.delete(f"/notes/{created['id']}")
     assert second.status_code == 404
-    assert second.json() == {"detail": "Note not found"}
+    assert second.json() == error_body("note_not_found", "Note not found")
 
 
 def test_delete_unknown_note_returns_404(client):
     response = client.delete(f"/notes/{uuid.uuid4()}")
     assert response.status_code == 404
-    assert response.json() == {"detail": "Note not found"}
+    assert response.json() == error_body("note_not_found", "Note not found")
 
 
 def test_delete_keeps_collection_and_tags(client, inbox):

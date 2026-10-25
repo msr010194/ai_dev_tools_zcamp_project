@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from app.main import create_app
 from app.services.timeline import TimelineFilters
 from tests.note_helpers import TYPES, create_note, make_collection, make_tag, patch_note
+from tests.error_helpers import error_body
 
 T0 = datetime(2026, 1, 1, tzinfo=UTC)
 
@@ -162,7 +163,7 @@ def test_malformed_cursor_is_rejected(client, store, inbox, cursor):
     add_note(client, store, inbox, 1)
     response = client.get("/timeline", params={"cursor": cursor})
     assert response.status_code == 422
-    assert response.json() == {"detail": "Invalid cursor"}
+    assert response.json() == error_body("invalid_cursor", "Invalid cursor")
 
 
 def test_tampered_cursor_is_rejected(client, store, inbox):
@@ -171,7 +172,7 @@ def test_tampered_cursor_is_rejected(client, store, inbox):
     cursor = timeline(client, limit=1)["next_cursor"]
     response = client.get("/timeline", params={"limit": 1, "cursor": tamper(cursor)})
     assert response.status_code == 422
-    assert response.json() == {"detail": "Invalid cursor"}
+    assert response.json() == error_body("invalid_cursor", "Invalid cursor")
 
 
 def _sign(body: str, key: bytes) -> str:
@@ -187,7 +188,7 @@ def test_cursor_forged_without_the_secret_is_rejected(client, store, inbox):
     ).decode()
     response = client.get("/timeline", params={"cursor": forged})
     assert response.status_code == 422
-    assert response.json() == {"detail": "Invalid cursor"}
+    assert response.json() == error_body("invalid_cursor", "Invalid cursor")
 
 
 @pytest.mark.parametrize(
@@ -197,7 +198,7 @@ def test_signed_but_malformed_cursor_body_is_rejected(app, client, body):
     cursor = _sign(body, app.state.settings.cursor_secret.encode())
     response = client.get("/timeline", params={"cursor": cursor})
     assert response.status_code == 422
-    assert response.json() == {"detail": "Invalid cursor"}
+    assert response.json() == error_body("invalid_cursor", "Invalid cursor")
 
 
 def test_cursor_from_another_app_instance_is_rejected(client, store, inbox):
@@ -210,7 +211,7 @@ def test_cursor_from_another_app_instance_is_rejected(client, store, inbox):
         foreign = other_client.get("/timeline", params={"limit": 1}).json()["next_cursor"]
     response = client.get("/timeline", params={"limit": 1, "cursor": foreign})
     assert response.status_code == 422
-    assert response.json() == {"detail": "Invalid cursor"}
+    assert response.json() == error_body("invalid_cursor", "Invalid cursor")
 
 
 def test_shared_cursor_secret_makes_cursors_portable(monkeypatch):
@@ -239,7 +240,7 @@ def test_cursor_with_different_filters_is_rejected(client, store, inbox, other_f
     params = {k: (other if v == "OTHER" else v) for k, v in other_filters.items()}
     response = client.get("/timeline", params={"limit": 1, "cursor": cursor, **params})
     assert response.status_code == 422
-    assert response.json() == {"detail": "Invalid cursor"}
+    assert response.json() == error_body("invalid_cursor", "Invalid cursor")
 
 
 def test_cursor_can_change_limit(client, store, inbox):
@@ -297,7 +298,7 @@ def test_descendants_without_collection_is_rejected(client):
 def test_unknown_collection_is_rejected(client):
     response = client.get("/timeline", params={"collection_id": "no-such-collection"})
     assert response.status_code == 422
-    assert response.json() == {"detail": "Collection not found"}
+    assert response.json() == error_body("collection_not_found", "Collection not found")
 
 
 @pytest.mark.parametrize("type_", TYPES)
@@ -324,7 +325,7 @@ def test_tag_filter(client, store, inbox):
 def test_unknown_tag_is_rejected(client):
     response = client.get("/timeline", params={"tag_id": "no-such-tag"})
     assert response.status_code == 422
-    assert response.json() == {"detail": "Tag not found"}
+    assert response.json() == error_body("tag_not_found", "Tag not found")
 
 
 def test_untagged_filter(client, store, inbox):

@@ -10,6 +10,7 @@ import pytest
 import app.main as app_main
 from app.dependencies import get_clock, get_random
 from tests.note_helpers import TYPES, create_note, get_note, make_collection
+from tests.error_helpers import error_body
 
 START = datetime(2026, 1, 1, 9, 0, tzinfo=UTC)
 
@@ -249,7 +250,7 @@ def test_mark_twice(client, clock, rng, inbox):
 def test_mark_unknown_note(client, clock, rng):
     response = client.post("/notes/no-such-note/resurfaced")
     assert response.status_code == 404
-    assert response.json() == {"detail": "Note not found"}
+    assert response.json() == error_body("note_not_found", "Note not found")
 
 
 def test_mark_ignores_body(client, clock, rng, inbox):

@@ -29,8 +29,6 @@ OPERATIONS = {
     ("post", "/notes/{note_id}/resurfaced"): ("markNoteResurfaced", "resurfacing"),
 }
 NO_CONTENT_OPERATIONS = {"deleteCollection", "deleteNote"}
-# FastAPI's built-in validation error schemas have untyped fields; #18 replaces them.
-BUILTIN_SCHEMAS = {"ValidationError", "HTTPValidationError"}
 SCHEMA_KEYWORDS = {"type", "$ref", "oneOf", "anyOf", "allOf", "enum", "const"}
 
 
@@ -157,8 +155,7 @@ def test_success_responses_reference_named_schemas(spec):
 def test_no_untyped_schemas(spec):
     problems = []
     for name, schema in spec["components"]["schemas"].items():
-        if name not in BUILTIN_SCHEMAS:
-            problems += untyped_schemas(schema, name)
+        problems += untyped_schemas(schema, name)
     for method, path, operation in operations(spec):
         for holder in [operation.get("requestBody", {}), *operation["responses"].values()]:
             problems += untyped_schemas(json_schema(holder), f"{method} {path}")

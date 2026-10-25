@@ -1,14 +1,15 @@
-"""HTTP endpoint for the unified timeline; service errors become `{"detail": message}` responses."""
+"""HTTP endpoint for the unified timeline. Service errors are handled by `app.errors`."""
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query
 
 from app.dependencies import get_timeline_service
+from app.errors import error_responses
 from app.models.note import NoteType
 from app.schemas.notes import to_note_out
 from app.schemas.timeline import TimelinePageOut
-from app.services.timeline import TimelineError, TimelineFilters, TimelineService
+from app.services.timeline import TimelineFilters, TimelineService
 
 router = APIRouter(prefix="/timeline", tags=["timeline"])
 
@@ -23,6 +24,7 @@ MAX_PAGE_SIZE = 100
     response_model=TimelinePageOut,
     operation_id="getTimeline",
     summary="List notes newest first, one page at a time",
+    responses=error_responses(422),
 )
 def get_timeline(
     service: Service,
@@ -55,10 +57,5 @@ def get_timeline(
         tag_id=tag_id,
         untagged=untagged,
     )
-    try:
-        page = service.page(filters, limit, cursor)
-    except TimelineError as error:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)
-        ) from error
+    page = service.page(filters, limit, cursor)
     return {"items": [to_note_out(note) for note in page.items], "next_cursor": page.next_cursor}

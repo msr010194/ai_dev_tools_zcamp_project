@@ -11,6 +11,8 @@ from app.repositories.memory import InMemoryRepository
 from app.schemas.collections import CollectionName
 from app.schemas.tags import TagName
 from app.services.tags import DuplicateTagNameError, TagNotFoundError, TagService
+from tests.error_helpers import error_body
+from tests.error_helpers import assert_validation_error as assert_shared_validation_error
 
 DUPLICATE = "A tag with that name already exists"
 NOT_FOUND = "Tag not found"
@@ -142,7 +144,7 @@ def test_create_duplicate_name_returns_409(client, existing, candidate):
     before = list_tags(client)
     response = client.post("/tags", json={"name": candidate})
     assert response.status_code == 409
-    assert response.json() == {"detail": DUPLICATE}
+    assert response.json() == error_body("duplicate_tag_name", DUPLICATE)
     assert list_tags(client) == before
 
 
@@ -176,7 +178,7 @@ def test_rename_to_name_of_other_tag_returns_409(client, existing, candidate):
     before = list_tags(client)
     response = client.patch(f"/tags/{other['id']}", json={"name": candidate})
     assert response.status_code == 409
-    assert response.json() == {"detail": DUPLICATE}
+    assert response.json() == error_body("duplicate_tag_name", DUPLICATE)
     assert list_tags(client) == before
 
 
@@ -203,7 +205,7 @@ def test_rename_unknown_id_returns_404(client, missing_id):
     before = list_tags(client)
     response = client.patch(f"/tags/{missing_id}", json={"name": "Projects"})
     assert response.status_code == 404
-    assert response.json() == {"detail": NOT_FOUND}
+    assert response.json() == error_body("tag_not_found", NOT_FOUND)
     assert list_tags(client) == before
 
 
@@ -226,12 +228,7 @@ INVALID_BODIES = [
 
 
 def assert_validation_error(response):
-    assert response.status_code == 422, response.text
-    body = response.json()
-    assert set(body) == {"detail"}
-    assert isinstance(body["detail"], list) and body["detail"]
-    for item in body["detail"]:
-        assert {"loc", "msg", "type"} <= set(item)
+    assert_shared_validation_error(response)
 
 
 @pytest.mark.parametrize("body", INVALID_BODIES)
@@ -281,10 +278,7 @@ def test_rename_accepts_name_at_limit(client, raw, stored):
 
 def _shape(response):
     body = response.json()
-    detail = body["detail"]
-    if isinstance(detail, list):
-        return sorted(body), "list", all({"loc", "msg", "type"} <= set(item) for item in detail)
-    return sorted(body), type(detail).__name__
+    return sorted(body), body["code"].endswith("_not_found"), bool(body["errors"])
 
 
 def test_error_bodies_match_collections_api(client):

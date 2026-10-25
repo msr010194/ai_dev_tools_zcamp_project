@@ -7,6 +7,7 @@ from typing import Protocol
 from app.models.collection import Collection
 from app.repositories.base import Identifiable, Repository
 from app.schemas.collections import CollectionTree
+from app.services.errors import ServiceError
 
 
 class CollectionMember(Identifiable, Protocol):
@@ -16,32 +17,32 @@ class CollectionMember(Identifiable, Protocol):
     def collection_id(self) -> str | None: ...
 
 
-class CollectionError(Exception):
-    """Base class for collection rule violations; `str(error)` is the client-facing message."""
-
-    message = "Collection error"
-
-    def __init__(self) -> None:
-        super().__init__(self.message)
+class CollectionError(ServiceError):
+    """Base class for collection rule violations."""
 
 
 class CollectionNotFoundError(CollectionError):
+    code = "collection_not_found"
     message = "Collection not found"
 
 
 class ParentCollectionNotFoundError(CollectionError):
+    code = "parent_collection_not_found"
     message = "Parent collection not found"
 
 
 class CollectionCycleError(CollectionError):
+    code = "collection_cycle"
     message = "A collection cannot be moved under itself or one of its descendants"
 
 
 class DuplicateCollectionNameError(CollectionError):
+    code = "duplicate_collection_name"
     message = "A collection with that name already exists here"
 
 
 class CollectionNotEmptyError(CollectionError):
+    code = "collection_not_empty"
     message = "Collection is not empty. Move or delete its contents first."
 
 

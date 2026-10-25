@@ -9,6 +9,7 @@ from typing import Protocol
 
 from app.models.note import Note
 from app.repositories.base import Repository
+from app.services.errors import ServiceError
 
 SET_SIZE = 3
 MIN_AGE = timedelta(days=7)
@@ -22,14 +23,12 @@ class RandomSource(Protocol):
     def random(self) -> float: ...
 
 
-class ResurfaceError(Exception):
-    message = "Resurfacing error"
-
-    def __init__(self) -> None:
-        super().__init__(self.message)
+class ResurfaceError(ServiceError):
+    """Base class for resurfacing errors."""
 
 
 class ResurfaceNoteNotFoundError(ResurfaceError):
+    code = "note_not_found"
     message = "Note not found"
 
 

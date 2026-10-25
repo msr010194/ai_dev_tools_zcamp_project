@@ -3,6 +3,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 
+from app.errors import register_error_handlers
 from app.repositories.memory import InMemoryStore
 from app.routers import collections, health, notes, resurface, tags, timeline
 from app.settings import Settings
@@ -22,6 +23,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title=settings.app_name, version=project_version())
     app.state.settings = settings
     app.state.store = InMemoryStore()
+    register_error_handlers(app)
     app.include_router(health.router)
     app.include_router(collections.router)
     app.include_router(tags.router)

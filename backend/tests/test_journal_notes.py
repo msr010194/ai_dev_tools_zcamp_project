@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from tests.note_helpers import TYPES, create_note, get_note, make_collection, note_payload, patch_note
+from tests.error_helpers import error_body
 
 JOURNAL_FIELDS = {
     "entry_date": "2026-01-05T10:00:00Z",
@@ -249,7 +250,7 @@ def test_prompt_can_be_set_later_once(client, journal):
 
     response = patch_note(client, journal["id"], {"prompt": "Changed prompt"})
     assert response.status_code == 422
-    assert response.json() == {"detail": "Prompt cannot be changed once set"}
+    assert response.json() == error_body("prompt_locked", "Prompt cannot be changed once set")
     assert get_note(client, journal["id"])["prompt"] == "Later prompt"
 
 
@@ -258,7 +259,7 @@ def test_set_prompt_cannot_be_changed_or_cleared(client, inbox, value):
     note = create_note(client, inbox, "journal", prompt="Original")
     response = patch_note(client, note["id"], {"prompt": value, "body": "New body"})
     assert response.status_code == 422
-    assert response.json() == {"detail": "Prompt cannot be changed once set"}
+    assert response.json() == error_body("prompt_locked", "Prompt cannot be changed once set")
     assert get_note(client, note["id"]) == note
 
 
@@ -279,7 +280,7 @@ def test_turning_off_retrospective_with_period_is_rejected(client, inbox):
     note = create_note(client, inbox, "journal", is_retrospective=True, period="monthly")
     response = patch_note(client, note["id"], {"is_retrospective": False})
     assert response.status_code == 422
-    assert response.json() == {"detail": "Period requires is_retrospective"}
+    assert response.json() == error_body("period_requires_retrospective", "Period requires is_retrospective")
     assert get_note(client, note["id"]) == note
 
 
@@ -294,7 +295,7 @@ def test_turning_off_retrospective_and_clearing_period(client, inbox):
 def test_period_on_non_retrospective_is_rejected(client, journal):
     response = patch_note(client, journal["id"], {"period": "weekly"})
     assert response.status_code == 422
-    assert response.json() == {"detail": "Period requires is_retrospective"}
+    assert response.json() == error_body("period_requires_retrospective", "Period requires is_retrospective")
     assert get_note(client, journal["id"]) == journal
 
 
@@ -317,5 +318,5 @@ def test_patch_journal_field_on_other_type(client, inbox, type_, field, value):
     note = create_note(client, inbox, type_)
     response = patch_note(client, note["id"], {field: value})
     assert response.status_code == 422
-    assert response.json() == {"detail": "Field not allowed for this note type"}
+    assert response.json() == error_body("field_not_allowed", "Field not allowed for this note type")
     assert get_note(client, note["id"]) == note

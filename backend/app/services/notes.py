@@ -9,50 +9,57 @@ from app.models.collection import Collection
 from app.models.note import NOTE_CLASSES, JournalNote, Note, NoteType, type_fields
 from app.models.tag import Tag
 from app.repositories.base import Repository
+from app.services.errors import ServiceError
 
 _SHARED_UPDATABLE_FIELDS = frozenset({"body", "collection_id", "tag_ids"})
 
 
-class NoteError(Exception):
-    message = "Note error"
-
-    def __init__(self) -> None:
-        super().__init__(self.message)
+class NoteError(ServiceError):
+    """Base class for note rule violations."""
 
 
 class NoteNotFoundError(NoteError):
+    code = "note_not_found"
     message = "Note not found"
 
 
 class NoteCollectionNotFoundError(NoteError):
+    code = "collection_not_found"
     message = "Collection not found"
 
 
 class NoteTagNotFoundError(NoteError):
+    code = "tag_not_found"
     message = "Tag not found"
 
 
 class DuplicateTagIdError(NoteError):
+    code = "duplicate_tag_id"
     message = "Duplicate tag id"
 
 
 class NoteTypeChangeError(NoteError):
+    code = "note_type_change"
     message = "Note type cannot be changed"
 
 
 class EmptyNoteUpdateError(NoteError):
+    code = "empty_update"
     message = "At least one field must be provided"
 
 
 class FieldNotAllowedError(NoteError):
+    code = "field_not_allowed"
     message = "Field not allowed for this note type"
 
 
 class PromptLockedError(NoteError):
+    code = "prompt_locked"
     message = "Prompt cannot be changed once set"
 
 
 class PeriodRequiresRetrospectiveError(NoteError):
+    code = "period_requires_retrospective"
     message = "Period requires is_retrospective"
 
 

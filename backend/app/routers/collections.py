@@ -1,10 +1,11 @@
-"""Collections API: parses requests, calls `CollectionService` and maps its errors to HTTP."""
+"""Collections API: parses requests and calls `CollectionService`. Service errors are handled by `app.errors`."""
 
-from typing import Annotated, NoReturn
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, Response, status
 
 from app.dependencies import get_collection_service
+from app.errors import error_responses
 from app.schemas.collections import (
     CollectionCreate,
     CollectionOut,
@@ -12,31 +13,11 @@ from app.schemas.collections import (
     CollectionUpdate,
     dump_tree_json,
 )
-from app.services.collections import (
-    CollectionCycleError,
-    CollectionError,
-    CollectionNotEmptyError,
-    CollectionNotFoundError,
-    CollectionService,
-    DuplicateCollectionNameError,
-    ParentCollectionNotFoundError,
-)
+from app.services.collections import CollectionService
 
 router = APIRouter(prefix="/collections", tags=["collections"])
 
 Service = Annotated[CollectionService, Depends(get_collection_service)]
-
-_STATUS_FOR_ERROR: dict[type[CollectionError], int] = {
-    CollectionNotFoundError: status.HTTP_404_NOT_FOUND,
-    ParentCollectionNotFoundError: status.HTTP_422_UNPROCESSABLE_CONTENT,
-    CollectionCycleError: status.HTTP_400_BAD_REQUEST,
-    DuplicateCollectionNameError: status.HTTP_409_CONFLICT,
-    CollectionNotEmptyError: status.HTTP_409_CONFLICT,
-}
-
-
-def _raise_http(error: CollectionError) -> NoReturn:
-    raise HTTPException(status_code=_STATUS_FOR_ERROR[type(error)], detail=str(error)) from error
 
 
 @router.get(
@@ -57,12 +38,10 @@ def list_collections(service: Service) -> Response:
     response_model=CollectionOut,
     operation_id="createCollection",
     summary="Create a collection",
+    responses=error_responses(409, 422),
 )
 def create_collection(body: CollectionCreate, service: Service) -> CollectionOut:
-    try:
-        collection = service.create(body.name, body.parent_id)
-    except CollectionError as error:
-        _raise_http(error)
+    collection = service.create(body.name, body.parent_id)
     return CollectionOut.model_validate(collection.model_dump())
 
 
@@ -71,17 +50,15 @@ def create_collection(body: CollectionCreate, service: Service) -> CollectionOut
     response_model=CollectionOut,
     operation_id="updateCollection",
     summary="Rename or move a collection",
+    responses=error_responses(400, 404, 409, 422),
 )
 def update_collection(
     collection_id: str, body: CollectionUpdate, service: Service
 ) -> CollectionOut:
     """Rename and/or move a collection. Omit `parent_id` to stay put; `null` moves to top level."""
-    try:
-        collection = service.update(
-            collection_id, name=body.name, move=body.moves, parent_id=body.parent_id
-        )
-    except CollectionError as error:
-        _raise_http(error)
+    collection = service.update(
+        collection_id, name=body.name, move=body.moves, parent_id=body.parent_id
+    )
     return CollectionOut.model_validate(collection.model_dump())
 
 
@@ -95,10 +72,8 @@ def update_collection(
         "Delete an empty collection. A collection that still has child collections or notes "
         "is not deleted: the request is rejected with 409 Conflict. Unknown ids return 404."
     ),
+    responses=error_responses(404, 409, 422),
 )
 def delete_collection(collection_id: str, service: Service) -> Response:
-    try:
-        service.delete(collection_id)
-    except CollectionError as error:
-        _raise_http(error)
+    service.delete(collection_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

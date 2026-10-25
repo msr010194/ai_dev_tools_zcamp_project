@@ -3,6 +3,7 @@ from pydantic import BaseModel
 
 from app.models.collection import Collection
 from app.repositories.memory import InMemoryRepository
+from tests.error_helpers import assert_validation_error, error_body
 
 DUPLICATE = "A collection with that name already exists here"
 NOT_FOUND = "Collection not found"
@@ -140,7 +141,7 @@ def test_create_invalid_body_returns_422(client, body, expected_status):
     response = client.post("/collections", json=body)
     assert response.status_code == expected_status
     if expected_status == 422:
-        assert isinstance(response.json()["detail"], list)
+        assert_validation_error(response)
         assert tree(client) == []
     else:
         assert response.json()["name"] == body["name"].strip()
@@ -152,7 +153,7 @@ def test_create_with_unknown_parent_returns_422(client):
     before = tree(client)
     response = client.post("/collections", json={"name": "Child", "parent_id": "missing"})
     assert response.status_code == 422
-    assert response.json() == {"detail": PARENT_NOT_FOUND}
+    assert response.json() == error_body("parent_collection_not_found", PARENT_NOT_FOUND)
     assert tree(client) == before
 
 
@@ -165,10 +166,10 @@ def test_create_duplicate_sibling_name_returns_409(client):
     for name in ("work", "  WORK ", "Work"):
         response = client.post("/collections", json={"name": name})
         assert response.status_code == 409
-        assert response.json() == {"detail": DUPLICATE}
+        assert response.json() == error_body("duplicate_collection_name", DUPLICATE)
     response = client.post("/collections", json={"name": "notes", "parent_id": work})
     assert response.status_code == 409
-    assert response.json() == {"detail": DUPLICATE}
+    assert response.json() == error_body("duplicate_collection_name", DUPLICATE)
     assert tree(client) == before
 
     response = client.post("/collections", json={"name": "Work", "parent_id": personal})
@@ -268,7 +269,7 @@ def test_rename_validation_and_duplicates(client):
     for name in ("personal", "PERSONAL", " Personal "):
         response = client.patch(f"/collections/{work}", json={"name": name})
         assert response.status_code == 409
-        assert response.json() == {"detail": DUPLICATE}
+        assert response.json() == error_body("duplicate_collection_name", DUPLICATE)
         assert tree(client) == before
 
     # A name used under a different parent is fine.
@@ -337,7 +338,7 @@ def test_move_under_itself_returns_400(client):
 
     response = client.patch(f"/collections/{work}", json={"parent_id": work})
     assert response.status_code == 400
-    assert response.json() == {"detail": CYCLE}
+    assert response.json() == error_body("collection_cycle", CYCLE)
     assert tree(client) == before
 
 
@@ -351,7 +352,7 @@ def test_move_under_descendant_returns_400(client):
     for target in (child, great):
         response = client.patch(f"/collections/{work}", json={"parent_id": target})
         assert response.status_code == 400
-        assert response.json() == {"detail": CYCLE}
+        assert response.json() == error_body("collection_cycle", CYCLE)
         assert tree(client) == before
 
     response = client.patch(f"/collections/{work}", json={"name": "Renamed", "parent_id": great})
@@ -366,7 +367,7 @@ def test_move_under_unknown_parent_returns_422(client):
 
     response = client.patch(f"/collections/{work}", json={"parent_id": "missing"})
     assert response.status_code == 422
-    assert response.json() == {"detail": PARENT_NOT_FOUND}
+    assert response.json() == error_body("parent_collection_not_found", PARENT_NOT_FOUND)
     assert tree(client) == before
 
 
@@ -379,7 +380,7 @@ def test_move_into_duplicate_name_returns_409(client):
 
     response = client.patch(f"/collections/{ideas}", json={"parent_id": personal})
     assert response.status_code == 409
-    assert response.json() == {"detail": DUPLICATE}
+    assert response.json() == error_body("duplicate_collection_name", DUPLICATE)
     assert tree(client) == before
 
     # Moving to the top level where a "work" sibling exists is also a duplicate.
@@ -429,7 +430,7 @@ def test_patch_unknown_id_returns_404(client):
     for body in ({"name": "X"}, {"parent_id": None}):
         response = client.patch("/collections/does-not-exist", json=body)
         assert response.status_code == 404
-        assert response.json() == {"detail": NOT_FOUND}
+        assert response.json() == error_body("collection_not_found", NOT_FOUND)
         assert tree(client) == before
 
 
@@ -453,7 +454,7 @@ def test_delete_collection_with_children_returns_409(client):
 
     response = client.delete(f"/collections/{work}")
     assert response.status_code == 409
-    assert response.json() == {"detail": NOT_EMPTY}
+    assert response.json() == error_body("collection_not_empty", NOT_EMPTY)
     assert tree(client) == before
 
 
@@ -464,7 +465,7 @@ def test_delete_collection_with_notes_returns_409(client, store):
 
     response = client.delete(f"/collections/{work}")
     assert response.status_code == 409
-    assert response.json() == {"detail": NOT_EMPTY}
+    assert response.json() == error_body("collection_not_empty", NOT_EMPTY)
     assert tree(client) == before
     assert store.collections.get(work) is not None
 
@@ -484,7 +485,7 @@ def test_delete_unknown_id_returns_404(client):
     before = tree(client)
     response = client.delete("/collections/does-not-exist")
     assert response.status_code == 404
-    assert response.json() == {"detail": NOT_FOUND}
+    assert response.json() == error_body("collection_not_found", NOT_FOUND)
     assert tree(client) == before
 
 
@@ -535,7 +536,7 @@ def test_deep_nesting_four_levels(client):
     before = tree(client)
     response = client.patch(f"/collections/{work}", json={"parent_id": detail})
     assert response.status_code == 400
-    assert response.json() == {"detail": CYCLE}
+    assert response.json() == error_body("collection_cycle", CYCLE)
     assert tree(client) == before
 
     for collection_id in (detail, sub, project, work):
@@ -566,7 +567,7 @@ def test_deep_chain_created_through_api_lists_as_tree(client):
     before = tree(client)
     response = client.patch(f"/collections/{ids[0]}", json={"parent_id": ids[-1]})
     assert response.status_code == 400
-    assert response.json() == {"detail": CYCLE}
+    assert response.json() == error_body("collection_cycle", CYCLE)
     assert tree(client) == before
 
 
