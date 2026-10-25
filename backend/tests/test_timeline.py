@@ -1,10 +1,16 @@
 """Tests for `GET /timeline` (#15): ordering, cursor pagination and filters."""
 
 import base64
+import hashlib
+import hmac
+import json
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from fastapi.testclient import TestClient
 
+from app.main import create_app
+from app.services.timeline import TimelineFilters
 from tests.note_helpers import TYPES, create_note, make_collection, make_tag, patch_note
 
 T0 = datetime(2026, 1, 1, tzinfo=UTC)
@@ -166,6 +172,59 @@ def test_tampered_cursor_is_rejected(client, store, inbox):
     response = client.get("/timeline", params={"limit": 1, "cursor": tamper(cursor)})
     assert response.status_code == 422
     assert response.json() == {"detail": "Invalid cursor"}
+
+
+def _sign(body: str, key: bytes) -> str:
+    signature = hmac.new(key, body.encode(), hashlib.sha256).hexdigest()[:16]
+    return base64.urlsafe_b64encode((signature + body).encode()).decode().rstrip("=")
+
+
+def test_cursor_forged_without_the_secret_is_rejected(client, store, inbox):
+    add_note(client, store, inbox, 1)
+    body = json.dumps({"f": TimelineFilters().fingerprint(), "i": "x", "t": T0.isoformat()})
+    forged = base64.urlsafe_b64encode(
+        (hashlib.sha256(body.encode()).hexdigest()[:16] + body).encode()
+    ).decode()
+    response = client.get("/timeline", params={"cursor": forged})
+    assert response.status_code == 422
+    assert response.json() == {"detail": "Invalid cursor"}
+
+
+@pytest.mark.parametrize(
+    "body", ["[" * 5000 + "]" * 5000, "[1, 2]", '"text"', "null", '{"t": 1, "i": "x", "f": "y"}']
+)
+def test_signed_but_malformed_cursor_body_is_rejected(app, client, body):
+    cursor = _sign(body, app.state.settings.cursor_secret.encode())
+    response = client.get("/timeline", params={"cursor": cursor})
+    assert response.status_code == 422
+    assert response.json() == {"detail": "Invalid cursor"}
+
+
+def test_cursor_from_another_app_instance_is_rejected(client, store, inbox):
+    for minutes in range(3):
+        add_note(client, store, inbox, minutes)
+    with TestClient(create_app()) as other_client:
+        other_inbox = make_collection(other_client, "Inbox")
+        for _ in range(3):
+            create_note(other_client, other_inbox)
+        foreign = other_client.get("/timeline", params={"limit": 1}).json()["next_cursor"]
+    response = client.get("/timeline", params={"limit": 1, "cursor": foreign})
+    assert response.status_code == 422
+    assert response.json() == {"detail": "Invalid cursor"}
+
+
+def test_shared_cursor_secret_makes_cursors_portable(monkeypatch):
+    monkeypatch.setenv("NOTES_CURSOR_SECRET", "shared-secret")
+    first_app, second_app = create_app(), create_app()
+    second_app.state.store = first_app.state.store
+    with TestClient(first_app) as first, TestClient(second_app) as second:
+        inbox = make_collection(first, "Inbox")
+        for _ in range(3):
+            create_note(first, inbox)
+        cursor = first.get("/timeline", params={"limit": 1}).json()["next_cursor"]
+        response = second.get("/timeline", params={"limit": 1, "cursor": cursor})
+    assert response.status_code == 200
+    assert len(response.json()["items"]) == 1
 
 
 @pytest.mark.parametrize(

@@ -3,6 +3,7 @@
 import base64
 import binascii
 import hashlib
+import hmac
 import json
 from dataclasses import asdict, dataclass
 from datetime import datetime
@@ -68,33 +69,42 @@ def _sort_key(note: Note) -> _SortKey:
     return note.created_at, note.id
 
 
-def _checksum(text: str) -> str:
-    return hashlib.sha256(text.encode()).hexdigest()[:_CHECKSUM_LENGTH]
+def _signature(key: bytes, text: str) -> str:
+    return hmac.new(key, text.encode(), hashlib.sha256).hexdigest()[:_CHECKSUM_LENGTH]
 
 
-def encode_cursor(position: _SortKey, filters: TimelineFilters) -> str:
-    """An opaque token: the last item's sort key plus the filters it belongs to, with a checksum."""
+def encode_cursor(position: _SortKey, filters: TimelineFilters, key: bytes) -> str:
+    """An opaque token: the last item's sort key plus the filters it belongs to, signed with `key`."""
     created_at, note_id = position
     body = json.dumps(
         {"t": created_at.isoformat(), "i": note_id, "f": filters.fingerprint()},
         sort_keys=True,
         separators=(",", ":"),
     )
-    token = _checksum(body) + body
+    token = _signature(key, body) + body
     return base64.urlsafe_b64encode(token.encode()).decode().rstrip("=")
 
 
-def decode_cursor(cursor: str, filters: TimelineFilters) -> _SortKey:
+def decode_cursor(cursor: str, filters: TimelineFilters, key: bytes) -> _SortKey:
     try:
         token = base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)).decode()
-        checksum, body = token[:_CHECKSUM_LENGTH], token[_CHECKSUM_LENGTH:]
-        if checksum != _checksum(body):
+        signature, body = token[:_CHECKSUM_LENGTH], token[_CHECKSUM_LENGTH:]
+        if not hmac.compare_digest(signature, _signature(key, body)):
             raise InvalidCursorError()
         data = json.loads(body)
+        if not isinstance(data, dict):
+            raise InvalidCursorError()
         created_at = datetime.fromisoformat(data["t"])
         note_id = data["i"]
         fingerprint = data["f"]
-    except (binascii.Error, UnicodeDecodeError, ValueError, KeyError, TypeError) as error:
+    except (
+        binascii.Error,
+        UnicodeError,
+        ValueError,
+        KeyError,
+        TypeError,
+        RecursionError,
+    ) as error:
         raise InvalidCursorError() from error
     if created_at.tzinfo is None or not isinstance(note_id, str) or fingerprint != filters.fingerprint():
         raise InvalidCursorError()
@@ -107,15 +117,17 @@ class TimelineService:
         notes: Repository[Note],
         collections: Repository[Collection],
         tags: Repository[Tag],
+        cursor_key: bytes,
     ) -> None:
         self._notes = notes
         self._collections = collections
         self._tags = tags
+        self._cursor_key = cursor_key
 
     def page(self, filters: TimelineFilters, limit: int, cursor: str | None = None) -> TimelinePage:
         """Return up to `limit` matching notes after `cursor`, newest first (ties: higher id first)."""
         self._check_filters(filters)
-        after = decode_cursor(cursor, filters) if cursor is not None else None
+        after = decode_cursor(cursor, filters, self._cursor_key) if cursor is not None else None
         collection_ids = self._collection_scope(filters)
         matching = sorted(
             (note for note in self._notes.list() if self._matches(note, filters, collection_ids)),
@@ -126,7 +138,9 @@ class TimelineService:
             matching = [note for note in matching if _sort_key(note) < after]
         items = matching[:limit]
         has_more = len(matching) > limit
-        next_cursor = encode_cursor(_sort_key(items[-1]), filters) if has_more else None
+        next_cursor = (
+            encode_cursor(_sort_key(items[-1]), filters, self._cursor_key) if has_more else None
+        )
         return TimelinePage(items=items, next_cursor=next_cursor)
 
     def _check_filters(self, filters: TimelineFilters) -> None:

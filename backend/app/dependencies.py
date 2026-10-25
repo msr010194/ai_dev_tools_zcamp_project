@@ -61,8 +61,11 @@ def get_note_service(
 
 def get_timeline_service(
     store: Annotated[InMemoryStore, Depends(get_store)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> TimelineService:
-    return TimelineService(store.notes, store.collections, store.tags)
+    return TimelineService(
+        store.notes, store.collections, store.tags, cursor_key=settings.cursor_secret.encode()
+    )
 
 
 def get_resurface_service(
