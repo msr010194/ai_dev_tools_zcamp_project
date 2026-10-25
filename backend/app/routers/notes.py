@@ -5,10 +5,18 @@ from typing import Annotated, NoReturn
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from app.dependencies import get_note_service
-from app.schemas.notes import NoteCreate, NoteOut, NoteOutBase, NoteUpdate, to_note_out
+from app.schemas.notes import (
+    SHARED_CREATE_FIELDS,
+    NoteCreate,
+    NoteOut,
+    NoteOutBase,
+    NoteUpdate,
+    to_note_out,
+)
 from app.services.notes import (
     DuplicateTagIdError,
     EmptyNoteUpdateError,
+    FieldNotAllowedError,
     NoteCollectionNotFoundError,
     NoteError,
     NoteNotFoundError,
@@ -28,6 +36,7 @@ _STATUS_FOR_ERROR: dict[type[NoteError], int] = {
     DuplicateTagIdError: status.HTTP_422_UNPROCESSABLE_CONTENT,
     NoteTypeChangeError: status.HTTP_422_UNPROCESSABLE_CONTENT,
     EmptyNoteUpdateError: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    FieldNotAllowedError: status.HTTP_422_UNPROCESSABLE_CONTENT,
 }
 
 
@@ -37,8 +46,11 @@ def _raise_http(error: NoteError) -> NoReturn:
 
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=NoteOut)
 def create_note(payload: NoteCreate, service: Service) -> NoteOutBase:
+    fields = payload.model_dump(exclude_unset=True, exclude=set(SHARED_CREATE_FIELDS))
     try:
-        note = service.create(payload.type, payload.body, payload.collection_id, payload.tag_ids)
+        note = service.create(
+            payload.type, payload.body, payload.collection_id, payload.tag_ids, fields
+        )
     except NoteError as error:
         _raise_http(error)
     return to_note_out(note)
@@ -55,7 +67,7 @@ def get_note(note_id: str, service: Service) -> NoteOutBase:
 
 @router.patch("/{note_id}", response_model=NoteOut)
 def update_note(note_id: str, payload: NoteUpdate, service: Service) -> NoteOutBase:
-    changes = {name: getattr(payload, name) for name in payload.model_fields_set}
+    changes = payload.model_dump(include=payload.model_fields_set)
     try:
         note = service.update(note_id, changes)
     except NoteError as error:

@@ -6,11 +6,11 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.models.collection import Collection
-from app.models.note import Note, NoteType
+from app.models.note import NOTE_CLASSES, Note, NoteType, type_fields
 from app.models.tag import Tag
 from app.repositories.base import Repository
 
-_UPDATABLE_FIELDS = ("body", "collection_id", "tag_ids")
+_SHARED_UPDATABLE_FIELDS = frozenset({"body", "collection_id", "tag_ids"})
 
 
 class NoteError(Exception):
@@ -44,6 +44,10 @@ class EmptyNoteUpdateError(NoteError):
     message = "At least one field must be provided"
 
 
+class FieldNotAllowedError(NoteError):
+    message = "Field not allowed for this note type"
+
+
 class NoteService:
     def __init__(
         self,
@@ -71,16 +75,21 @@ class NoteService:
         body: str,
         collection_id: str,
         tag_ids: Sequence[str],
+        fields: Mapping[str, Any] | None = None,
     ) -> Note:
+        """Create a note; `fields` holds the Type-specific values that were sent (omitted ones use defaults)."""
+        fields = dict(fields or {})
+        if not set(fields) <= type_fields(note_type):
+            raise FieldNotAllowedError()
         self._require_collection(collection_id)
         self._check_tags(tag_ids)
-        note = Note(
+        note = NOTE_CLASSES[note_type](
             id=self._id_factory(),
-            type=note_type,
             body=body,
             collection_id=collection_id,
             tag_ids=list(tag_ids),
             created_at=self._clock(),
+            **fields,
         )
         return self._notes.add(note)
 
@@ -91,14 +100,16 @@ class NoteService:
         note = self.get(note_id)
         if "type" in changes and changes["type"] != note.type:
             raise NoteTypeChangeError()
-        if "collection_id" in changes:
-            self._require_collection(changes["collection_id"])
-        if "tag_ids" in changes:
-            self._check_tags(changes["tag_ids"])
-        updates = {name: changes[name] for name in _UPDATABLE_FIELDS if name in changes}
+        updates = {name: value for name, value in changes.items() if name != "type"}
+        if not set(updates) <= _SHARED_UPDATABLE_FIELDS | type_fields(note.type):
+            raise FieldNotAllowedError()
+        if "collection_id" in updates:
+            self._require_collection(updates["collection_id"])
         if "tag_ids" in updates:
+            self._check_tags(updates["tag_ids"])
             updates["tag_ids"] = list(updates["tag_ids"])
-        stored = self._notes.update(note.model_copy(update=updates))
+        updated = type(note).model_validate({**note.model_dump(), **updates})
+        stored = self._notes.update(updated)
         if stored is None:
             raise NoteNotFoundError()
         return stored

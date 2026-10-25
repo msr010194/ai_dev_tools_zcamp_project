@@ -17,22 +17,32 @@ from pydantic import (
 from app.models.note import Note, NoteType
 
 MAX_BODY_LENGTH = 100_000
+MAX_MEMORY_TEXT_LENGTH = 200
 
 
 def _not_blank(value: str) -> str:
     if not value.strip():
-        raise ValueError("body must not be blank")
+        raise ValueError("must not be blank")
     return value
 
 
-# Not trimmed: the body is stored exactly as sent, but it must contain something other than whitespace.
-NoteBody = Annotated[
-    str,
-    StringConstraints(min_length=1, max_length=MAX_BODY_LENGTH, strict=True),
-    AfterValidator(_not_blank),
-]
+def _not_null(value: Any) -> Any:
+    if value is None:
+        raise ValueError("may not be null")
+    return value
+
+
+def _text(max_length: int) -> StringConstraints:
+    return StringConstraints(min_length=1, max_length=max_length, strict=True)
+
+
+# Free text is stored exactly as sent (not trimmed) but must contain more than whitespace.
+NoteBody = Annotated[str, _text(MAX_BODY_LENGTH), AfterValidator(_not_blank)]
+MemoryText = Annotated[str, _text(MAX_MEMORY_TEXT_LENGTH), AfterValidator(_not_blank)]
 CollectionId = Annotated[str, StringConstraints(min_length=1, strict=True)]
 TagId = StrictStr
+
+SHARED_CREATE_FIELDS = frozenset({"type", "body", "collection_id", "tag_ids"})
 
 
 class NoteCreateBase(BaseModel):
@@ -64,6 +74,8 @@ class PlanNoteCreate(NoteCreateBase):
 
 class MemoryNoteCreate(NoteCreateBase):
     type: Literal["memory"]
+    when: MemoryText | None = None
+    where: MemoryText | None = None
 
 
 NoteCreate = Annotated[
@@ -73,7 +85,11 @@ NoteCreate = Annotated[
 
 
 class NoteUpdate(BaseModel):
-    """Partial update; omitted fields keep their value, explicit `null` is rejected."""
+    """Partial update; omitted fields keep their value.
+
+    Explicit `null` is rejected for shared and required fields, and clears optional Type fields.
+    Type fields are listed for every Type here; the service rejects those that don't belong to the note.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -81,13 +97,13 @@ class NoteUpdate(BaseModel):
     body: NoteBody | None = None
     collection_id: CollectionId | None = None
     tag_ids: list[TagId] | None = None
+    when: MemoryText | None = None
+    where: MemoryText | None = None
 
     @field_validator("type", "body", "collection_id", "tag_ids", mode="before")
     @classmethod
-    def _not_null(cls, value: Any) -> Any:
-        if value is None:
-            raise ValueError("may not be null")
-        return value
+    def _required_not_null(cls, value: Any) -> Any:
+        return _not_null(value)
 
 
 class NoteOutBase(BaseModel):
@@ -99,6 +115,8 @@ class NoteOutBase(BaseModel):
     collection_id: str
     tag_ids: list[str]
     created_at: datetime
+    last_resurfaced_at: datetime | None
+    resurface_count: int
 
 
 class JournalNoteOut(NoteOutBase):
@@ -119,6 +137,8 @@ class PlanNoteOut(NoteOutBase):
 
 class MemoryNoteOut(NoteOutBase):
     type: Literal["memory"]
+    when: str | None
+    where: str | None
 
 
 NoteOut = Annotated[

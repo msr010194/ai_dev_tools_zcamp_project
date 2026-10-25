@@ -11,13 +11,33 @@ from app.repositories.memory import InMemoryRepository
 from app.schemas.notes import NoteCreate, NoteCreateBase, NoteOut, NoteOutBase
 
 TYPES = ["journal", "idea", "reference", "plan", "memory"]
-FIELDS = {"id", "type", "body", "collection_id", "tag_ids", "created_at"}
+FIELDS = {
+    "id",
+    "type",
+    "body",
+    "collection_id",
+    "tag_ids",
+    "created_at",
+    "last_resurfaced_at",
+    "resurface_count",
+}
+OWN_FIELDS: dict[str, set[str]] = {
+    "journal": set(),
+    "idea": set(),
+    "reference": set(),
+    "plan": set(),
+    "memory": {"when", "where"},
+}
 TYPE_SPECIFIC_FIELDS = {
     "mood": "happy",
     "link": "https://example.com",
     "target_date": "2026-01-01",
     "where": "Lisbon",
 }
+FIELD_OWNER = {"mood": "journal", "link": "reference", "target_date": "plan", "where": "memory"}
+WRONG_TYPE_FIELDS = [
+    (type_, field) for type_ in TYPES for field in TYPE_SPECIFIC_FIELDS if FIELD_OWNER[field] != type_
+]
 MISSING = object()
 
 
@@ -70,14 +90,14 @@ def inbox(client) -> str:
 
 
 @pytest.mark.parametrize("type_", TYPES)
-def test_create_returns_201_with_exactly_the_six_fields(client, inbox, type_):
+def test_create_returns_201_with_exactly_the_shared_and_own_fields(client, inbox, type_):
     tag = make_tag(client, "work")
     response = client.post(
         "/notes", json={"type": type_, "body": "Hello", "collection_id": inbox, "tag_ids": [tag]}
     )
     assert response.status_code == 201, response.text
     note = response.json()
-    assert set(note) == FIELDS
+    assert set(note) == FIELDS | OWN_FIELDS[type_]
     assert note["type"] == type_
     assert note["body"] == "Hello"
     assert note["collection_id"] == inbox
@@ -123,11 +143,17 @@ def test_create_rejects_bad_type(client, inbox, value):
     assert response.status_code == 422
 
 
+@pytest.mark.parametrize(("type_", "field"), WRONG_TYPE_FIELDS)
+def test_create_rejects_other_types_fields(client, inbox, type_, field):
+    response = client.post(
+        "/notes", json=note_payload(inbox, type_, **{field: TYPE_SPECIFIC_FIELDS[field]})
+    )
+    assert response.status_code == 422
+
+
 @pytest.mark.parametrize("type_", TYPES)
-@pytest.mark.parametrize("field", [*TYPE_SPECIFIC_FIELDS, "colour"])
-def test_create_rejects_type_specific_and_unknown_fields(client, inbox, type_, field):
-    value = TYPE_SPECIFIC_FIELDS.get(field, "red")
-    response = client.post("/notes", json=note_payload(inbox, type_, **{field: value}))
+def test_create_rejects_unknown_fields(client, inbox, type_):
+    response = client.post("/notes", json=note_payload(inbox, type_, colour="red"))
     assert response.status_code == 422
 
 
@@ -237,7 +263,7 @@ def test_rejected_post_leaves_no_note(client, store, case):
         "unknown_tag": note_payload(target, tag_ids=["missing"]),
         "duplicate_tag": note_payload(target, tag_ids=[tag, tag]),
         "blank_body": note_payload(target, body="  "),
-        "type_specific": note_payload(target, mood="happy"),
+        "type_specific": note_payload(target, where="Lisbon"),
         "server_id": note_payload(target, id=str(uuid.uuid4())),
         "bad_type": note_payload(target, "task"),
     }
@@ -338,9 +364,8 @@ def test_patch_rejects_invalid_payloads_and_changes_nothing(client, inbox, paylo
     assert get_note(client, created["id"]) == created
 
 
-@pytest.mark.parametrize("type_", TYPES)
-@pytest.mark.parametrize("field", list(TYPE_SPECIFIC_FIELDS))
-def test_patch_rejects_type_specific_fields_on_every_type(client, inbox, type_, field):
+@pytest.mark.parametrize(("type_", "field"), WRONG_TYPE_FIELDS)
+def test_patch_rejects_other_types_fields(client, inbox, type_, field):
     created = create_note(client, inbox, type_)
     response = client.patch(f"/notes/{created['id']}", json={field: TYPE_SPECIFIC_FIELDS[field]})
     assert response.status_code == 422
@@ -513,9 +538,10 @@ def test_models_are_discriminated_unions_sharing_one_base(alias, base):
     assert {get_args(v.model_fields["type"].annotation)[0] for v in variants} == set(TYPES)
     for variant in variants:
         assert issubclass(variant, base)
-        assert set(variant.model_fields) == set(base.model_fields)
-        # Shared fields live on the base only; each variant declares just its `type`.
-        assert set(variant.__dict__.get("__annotations__", {})) == {"type"}
+        own = OWN_FIELDS[get_args(variant.model_fields["type"].annotation)[0]]
+        assert set(variant.model_fields) == set(base.model_fields) | own
+        # Shared fields live on the base only; each variant declares its `type` and its own fields.
+        assert set(variant.__dict__.get("__annotations__", {})) == {"type"} | own
 
 
 def test_create_variants_forbid_extra_fields():
