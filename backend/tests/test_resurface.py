@@ -160,9 +160,29 @@ def test_excluded_notes_are_avoided(client, clock, rng, inbox):
 
 def test_excluded_notes_fill_up_when_too_few_others(client, clock, rng, inbox):
     created = old_notes(client, clock, inbox, ["idea", "idea", "idea", "idea"])
-    picked = ids(resurface(client, exclude=created[:3]))
-    assert len(picked) == 3
-    assert len(set(picked)) == 3
+    for _ in range(50):
+        picked = ids(resurface(client, exclude=created[:3]))
+        assert len(picked) == 3
+        assert len(set(picked)) == 3
+        assert created[3] in picked
+
+
+def test_fresh_memory_is_preferred_over_excluded_ones_when_filling(client, clock, rng, inbox):
+    m1, i1, i2, m2 = old_notes(client, clock, inbox, ["memory", "idea", "idea", "memory"])
+    for _ in range(200):
+        picked = ids(resurface(client, exclude=[m1, i1, i2]))
+        assert len(picked) == 3
+        assert m2 in picked
+
+
+def test_memory_rule_wins_when_only_excluded_notes_are_memories(client, clock, rng, inbox):
+    created = old_notes(client, clock, inbox, ["memory", "idea", "idea", "idea", "idea"])
+    memory, fresh = created[0], created[2:]
+    for _ in range(50):
+        picked = ids(resurface(client, exclude=created[:2]))
+        assert memory in picked
+        assert created[1] not in picked
+        assert len(set(picked) & set(fresh)) == 2
 
 
 def test_unknown_excluded_ids_are_ignored(client, clock, rng, inbox):

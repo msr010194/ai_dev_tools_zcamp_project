@@ -47,7 +47,8 @@ class ResurfaceService:
     def pick(self, exclude: Collection[str] = ()) -> list[Note]:
         """Up to `SET_SIZE` distinct eligible notes, at least one Memory if any is eligible.
 
-        Notes in `exclude` are avoided unless there aren't enough other eligible notes.
+        Notes in `exclude` are only used when there aren't enough other eligible notes (to fill up)
+        or when the only eligible Memories are excluded (the Memory rule wins).
         """
         now = self._clock()
         eligible = sorted(
@@ -56,7 +57,6 @@ class ResurfaceService:
         )
         target = min(SET_SIZE, len(eligible))
         fresh = [note for note in eligible if note.id not in exclude]
-        candidates = fresh if len(fresh) >= target else eligible
         picked: list[Note] = []
 
         def take(pool: Sequence[Note]) -> None:
@@ -65,11 +65,11 @@ class ResurfaceService:
             if available and len(picked) < target:
                 picked.append(self._weighted_pick(available, now))
 
-        memories = [note for note in candidates if note.type == "memory"]
-        take(memories or [note for note in eligible if note.type == "memory"])
+        fresh_memories = [note for note in fresh if note.type == "memory"]
+        take(fresh_memories or [note for note in eligible if note.type == "memory"])
         while len(picked) < target:
             before = len(picked)
-            take(candidates)
+            take(fresh)
             if len(picked) == before:
                 take(eligible)
         return picked
