@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 
 from app.repositories.memory import InMemoryStore
-from app.routers import collections, health, notes, tags, timeline
+from app.routers import collections, health, notes, resurface, tags, timeline
 from app.settings import Settings
 
 
@@ -16,6 +16,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(tags.router)
     app.include_router(notes.router)
     app.include_router(timeline.router)
+    app.include_router(resurface.router)
     return app
 
 
