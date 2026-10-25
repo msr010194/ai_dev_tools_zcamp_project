@@ -31,6 +31,7 @@ MAX_CHECKLIST_ITEMS = 100
 MAX_CHECKLIST_ITEM_LENGTH = 500
 
 _ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+_ISO_DATETIME = re.compile(r"\d{4}-\d{2}-\d{2}[Tt ]\d{2}:\d{2}")
 
 
 def _not_blank(value: str) -> str:
@@ -45,15 +46,18 @@ def _not_null(value: Any) -> Any:
     return value
 
 
-def _require_str(value: Any) -> Any:
-    """Reject numbers etc. that Pydantic would otherwise coerce into dates."""
-    if not isinstance(value, str):
-        raise ValueError("must be a string")
+def _require_iso_datetime(value: Any) -> Any:
+    """Only ISO 8601 date-time strings; Pydantic would otherwise also take numbers and Unix timestamps."""
+    if not isinstance(value, str) or not _ISO_DATETIME.match(value):
+        raise ValueError("must be an ISO 8601 date-time string")
     return value
 
 
 def _to_utc(value: datetime) -> datetime:
-    return value.astimezone(UTC)
+    try:
+        return value.astimezone(UTC)
+    except OverflowError as error:
+        raise ValueError("is out of range") from error
 
 
 def _iso_date_string(value: Any) -> Any:
@@ -92,7 +96,9 @@ CalendarDate = Annotated[date, BeforeValidator(_iso_date_string)]
 CollectionId = Annotated[str, StringConstraints(min_length=1, strict=True)]
 TagId = StrictStr
 # An ISO 8601 string with a timezone offset, normalised to UTC.
-UtcDatetime = Annotated[AwareDatetime, BeforeValidator(_require_str), AfterValidator(_to_utc)]
+UtcDatetime = Annotated[
+    AwareDatetime, BeforeValidator(_require_iso_datetime), AfterValidator(_to_utc)
+]
 
 SHARED_CREATE_FIELDS = frozenset({"type", "body", "collection_id", "tag_ids"})
 

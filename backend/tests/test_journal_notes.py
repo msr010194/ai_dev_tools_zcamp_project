@@ -78,7 +78,20 @@ def test_entry_date_in_past_or_future_is_accepted(client, inbox, entry_date):
 
 
 @pytest.mark.parametrize(
-    "value", ["2026-01-05T10:00:00", "2026-01-05", "yesterday", "", None, 1700000000, True]
+    "value",
+    [
+        "2026-01-05T10:00:00",
+        "2026-01-05",
+        "yesterday",
+        "",
+        None,
+        1700000000,
+        "1700000000",
+        "1700000000.5",
+        True,
+        "9999-12-31T23:00:00-05:00",
+        "0001-01-01T00:30:00+01:00",
+    ],
 )
 def test_bad_entry_date_is_rejected(client, inbox, value):
     reject_post(client, inbox, entry_date=value)
@@ -216,6 +229,8 @@ def test_patch_null_on_required_field_is_rejected(client, journal, field):
         {"prompt": " "},
         {"entry_date": "2026-01-05T10:00:00"},
         {"entry_date": "2026-01-05"},
+        {"entry_date": "1700000000"},
+        {"entry_date": "9999-12-31T23:00:00-05:00"},
         {"period": "daily"},
         {"is_retrospective": "true"},
     ],
