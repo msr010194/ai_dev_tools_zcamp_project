@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 NoteType = Literal["journal", "idea", "reference", "plan", "memory"]
 RetroPeriod = Literal["weekly", "monthly"]
+ReferenceKind = Literal["written", "visual", "audio"]
 
 
 class Note(BaseModel):
@@ -35,6 +36,8 @@ class IdeaNote(Note):
 
 class ReferenceNote(Note):
     type: Literal["reference"] = "reference"
+    sub_kind: ReferenceKind = "written"
+    link: str | None = None
 
 
 class PlanNote(Note):
